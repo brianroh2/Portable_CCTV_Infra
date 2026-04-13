@@ -26,8 +26,8 @@ import urllib.error
 TB_URL      = "http://localhost:8080"
 MQTT_HOST   = "localhost"
 MQTT_PORT   = 1884          # 호스트 포트 (컨테이너 내부 1883으로 매핑)
-MQTT_TOKEN  = "YSucuQSBC3VNgqEWZk5q"  # test_02에서 발급받은 토큰
-DEVICE_ID   = "e365bb90-33ad-11f1-970c-d7cc10581c1e"
+MQTT_TOKEN  = "Xl8KVvfv6Gj7DAxEXNz3"  # test_02에서 발급받은 토큰 (클라우드 TB)
+DEVICE_ID   = "5631c920-370a-11f1-a479-f7cb8b0c250b"
 TENANT_EMAIL = "tenant@thingsboard.org"
 TENANT_PW    = "tenant"
 
