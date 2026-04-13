@@ -1,7 +1,7 @@
 services:
   thingsboard:
     container_name: thingsboard
-    image: thingsboard/tb-postgres:latest
+    image: thingsboard/tb-postgres:4.2.1.1
     restart: unless-stopped
     ports:
       - "8080:9090"   # 웹 UI (호스트 8080 → 컨테이너 9090)
