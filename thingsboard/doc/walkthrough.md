@@ -111,6 +111,19 @@ curl -s -X POST http://localhost:8080/api/auth/login \
 
 ---
 
+### [2026-04-13] 외부 AI 검토 반영 — 문서·설정 정확도 개선
+
+**배경:** 두 번째 외부 AI(Claude) 검토 결과를 반영하여 문서 및 설정 파일 정확도 개선.
+
+**변경 항목:**
+- `docker-compose.yml`: CoAP 포트(5683-5688/udp) 주석 처리 (이동형 CCTV 시나리오에 불필요)
+- `doc/architecture.md`:
+  - Section 2 포트 표기 명확화: `(포트 9090)` → `(컨테이너 9090)`, 포트 매핑 주석 보완
+  - Section 4 연동 방식: `MQTT 브릿지 1순위 또는 REST poll 2순위` → `MQTT 브릿지 (확정)` + 이유 명시
+- `doc/project-overview.md`: MQTT 브릿지 검토 상태 `1순위 검토` → `**확정**`
+
+---
+
 ### [2026-04-09] Device Profile 3종 + 가상 기기 3대 등록 완료 (PASS 38/38)
 
 **배경:** 실배포 3종 시나리오 대응 Device Profile 설계 및 가상 기기 검증.

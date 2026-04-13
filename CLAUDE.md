@@ -27,5 +27,6 @@ infra/
 
 - 테스트 코드: 각 프로젝트 `temp_test/` 폴더, 상단 목적 주석 필수
 - 문서 업데이트: 작업 완료 시 해당 프로젝트 `doc/walkthrough.md` 변경 이력 추가
+- temp_test/ 코드 변경 시: 해당 `walkthrough.md`의 테스트 PASS 횟수도 함께 업데이트
 - Frigate↔Thingsboard 통합: 사용자가 명시적으로 지시할 때까지 시작 안함
 - 응답 언어: 한국어

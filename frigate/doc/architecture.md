@@ -154,6 +154,8 @@ react-router-dom (라우팅)
 
 ### 5-2. 재활용 레이어 구조
 
+> **[미래 설계안]** 아래 Layer 1~3 구조는 mobile-cctv-vms UI 개발 단계(Step 3 이후)에 적용되는 계획이며, 현재는 미구현 상태.
+
 ```
 [Layer 1] shadcn/ui (MIT)
   기본 버튼·폼·테이블·모달·카드 전체
@@ -235,15 +237,18 @@ react-router-dom (라우팅)
 
 ## 7. 단계별 도입 순서
 
+> **참고:** 이 표는 기술 구현 관점의 세부 단계.  
+> 프로젝트 전체 로드맵은 `project-overview.md` → 6단계 고수준 기준 (Step 3=UI개발, Step 5=외부공유, Step 6=상용화준비)과 세분화 수준이 다름.
+
 | 단계 | 시기 | 작업 내용 |
 |---|---|---|
-| **Step 1** | 현재 완료 | Frigate VMS 안정화 (카메라 3대, 이벤트 녹화, MQTT, 스냅샷) |
-| **Step 2** | 다음 | Thingsboard CE를 docker-compose에 추가, 기기 데이터 구조 설계 |
-| **Step 3** | 개발 시작 | mobile-cctv-vms 프로젝트 생성 (동일 스택: React + Tailwind + Vite) |
-| **Step 4** | UI 구성 | Frigate 소스 참조하여 카메라 UI 컴포넌트 구성 |
-| **Step 5** | Fleet 연동 | Thingsboard API 연결, 기기 목록·상태 화면 추가 |
-| **Step 6** | 통합 완성 | Frigate MQTT 이벤트 → Thingsboard 연동, 단일 UI에서 통합 확인 |
-| **Step 7** | 외부 공유 | Tailscale Node Sharing으로 10명 사용자 접속 검증 |
+| **Step 1** | 완료 ✅ | Frigate VMS 안정화 (카메라 3대, 이벤트 녹화, MQTT, 스냅샷) |
+| **Step 2** | 진행 중 🔄 | Thingsboard CE 독립 검증, 기기 데이터 구조 설계 |
+| **Step 3** | 예정 | mobile-cctv-vms 프로젝트 생성 (React + Tailwind + Vite) |
+| **Step 4** | 예정 | Frigate 소스 참조하여 카메라 UI 컴포넌트 구성 |
+| **Step 5** | 예정 | Thingsboard API 연결, 기기 목록·상태 화면 추가 |
+| **Step 6** | 예정 | Frigate MQTT 이벤트 → Thingsboard 연동, 단일 UI에서 통합 확인 |
+| **Step 7** | 예정 | Tailscale Node Sharing으로 10명 사용자 접속 검증 |
 
 ---
 
