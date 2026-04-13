@@ -8,7 +8,7 @@
 
 ## 섹션 1 — 현재 인프라 현황 스냅샷
 
-> 마지막 업데이트: 2026-04-13
+> 마지막 업데이트: 2026-04-13 (TB-2 완료)
 
 ### 1-1. 환경별 역할
 
@@ -45,7 +45,7 @@
 |-------|------|------|
 | **Phase A** | GitHub 연동, Tailscale 준비 | ✅ GitHub 완료, Tailscale 미설치 |
 | **Phase B** | Hetzner 서버 구축 + Thingsboard 이전 | ✅ 완료 (2026-04-13) |
-| **TB-2** | Frigate → Thingsboard MQTT 연동 | 🔲 다음 단계 |
+| **TB-2** | Frigate → Thingsboard MQTT 연동 | ✅ 완료 (2026-04-13) |
 | **Phase C** | go2rtc, 에지 기기 연동 | 🔲 예정 |
 
 ### 1-5. 빠른 접속 명령어
@@ -69,6 +69,23 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 ## 섹션 2 — 변경 이력 (Changelog)
 
 > 최신 항목이 위에 온다. 완료된 항목은 수정하지 않는다.
+
+---
+
+### [2026-04-13] TB-2 완료 — Frigate → 클라우드 Thingsboard 텔레메트리 브리지
+
+**배경:** Frigate VMS 상태를 클라우드 Thingsboard(virtual_edge1)에 실시간 전달하는 MQTT 브리지 구축.
+로컬 PC Frigate → 클라우드 TB(46.62.155.122:1884) 직접 연결.
+
+**완료 항목:**
+- `frigate/scripts/frigate_tb_bridge.py` 신규 작성 (REST API 폴링 + MQTT 이벤트 구독)
+- `frigate/temp_test/test_tb2_bridge.py` 검증 통과 (PASS 11/11)
+- 브리지 백그라운드 기동, 60초 주기 텔레메트리 전송 확인
+
+**핵심 수집 방식:**
+- Frigate REST API `/api/stats` → inference_ms, cameras_online, cpu_usage (60초 주기)
+- Frigate MQTT `frigate/events` → person 감지 카운트 (실시간)
+- 클라우드 TB MQTT `v1/devices/me/telemetry` → 7개 키 전송
 
 ---
 

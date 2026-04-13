@@ -8,9 +8,10 @@
 |---------|------|---------|
 | `frigate/` | ✅ Step 1 완료 (2026-04-08) | Frigate 0.17.1 + OpenVINO + 카메라 3대 |
 | `thingsboard/` | ✅ TB-1 완료 (2026-04-09) | Device Profile 3종 + 가상기기 3대 PASS |
+| TB-2 브리지 | ✅ 완료 (2026-04-13) | Frigate REST→클라우드TB MQTT, 60초 주기 |
 
-**다음 단계:** TB-2 (Frigate → Thingsboard 연동) — 명시적 지시 후 시작
-**상세 현황:** `doc/temp_project_summary_0409.md` 참조
+**다음 단계:** Phase C (go2rtc, 에지 기기 연동) — 명시적 지시 후 시작
+**상세 현황:** `doc/walkthrough.md` 참조
 
 ## 작업 규칙
 
