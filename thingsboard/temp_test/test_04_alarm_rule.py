@@ -27,8 +27,8 @@ import urllib.error
 TB_URL       = "http://localhost:8080"
 MQTT_HOST    = "localhost"
 MQTT_PORT    = 1884
-MQTT_TOKEN   = "YSucuQSBC3VNgqEWZk5q"
-DEVICE_ID    = "e365bb90-33ad-11f1-970c-d7cc10581c1e"
+MQTT_TOKEN   = "Xl8KVvfv6Gj7DAxEXNz3"  # 클라우드 TB mobile-cctv-site-001
+DEVICE_ID    = "5631c920-370a-11f1-a479-f7cb8b0c250b"
 TENANT_EMAIL = "tenant@thingsboard.org"
 TENANT_PW    = "tenant"
 
