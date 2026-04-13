@@ -141,17 +141,28 @@ local_storage_gb    float   이벤트 영상 저장량 (GB)   알람: > 400
 
 ### 3-4. 현재 등록 기기
 
+> 환경별 MQTT 토큰이 다름 — Thingsboard DB가 분리되어 있으므로 로컬/클라우드 각각 발급됨.
+
+**클라우드 Thingsboard (Hetzner 46.62.155.122:8080) — 운영 기준**
 ```
 Tenant (테넌트: tenant@thingsboard.org)
 ├── Profile: settop
-│   ├── mobile-cctv-site-001     MQTT: YSucuQSBC3VNgqEWZk5q  ← 초기 검증용
-│   └── virtual_settop1          MQTT: ySaPv4sU2ZQPJuVYpwK9  ← S1 가상 기기
+│   ├── mobile-cctv-site-001     MQTT: Xl8KVvfv6Gj7DAxEXNz3  ← 초기 검증용
+│   └── virtual_settop1          MQTT: eMx3nS1nhXnI1CFFhLM7  ← S1 가상 기기
 │
 ├── Profile: ip-camera
-│   └── virtual_cctv1            MQTT: g19dPQxZArjsACP02kRS  ← S2/S3 가상 기기
+│   └── virtual_cctv1            MQTT: 8SOsGhAdlVwXoXkaKzuh  ← S2/S3 가상 기기
 │
 └── Profile: edge-controller
-    └── virtual_edge1            MQTT: Tdsw3bDUmzRc1Yd3cl3x  ← S3 가상 기기
+    └── virtual_edge1            MQTT: A3TPceILZWFqZGogYQ3j  ← S3 가상 기기
+```
+
+**로컬 Thingsboard (192.168.0.15:8080) — 테스트 전용**
+```
+├── mobile-cctv-site-001     MQTT: YSucuQSBC3VNgqEWZk5q
+├── virtual_settop1          MQTT: ySaPv4sU2ZQPJuVYpwK9
+├── virtual_cctv1            MQTT: g19dPQxZArjsACP02kRS
+└── virtual_edge1            MQTT: Tdsw3bDUmzRc1Yd3cl3x
 ```
 
 > `mobile-cctv-site-001`은 TB-1 검증 목적으로 생성. 향후 `settop` Profile로 정리 예정.

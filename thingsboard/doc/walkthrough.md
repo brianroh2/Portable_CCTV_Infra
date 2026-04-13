@@ -9,13 +9,17 @@
 
 ## 섹션 1 — 현재 운영 현황 스냅샷
 
-> 마지막 업데이트: 2026-04-09
+> 마지막 업데이트: 2026-04-13
 > 이 섹션만 읽으면 현재 시스템 상태를 파악할 수 있다.
 
 ### 1-1. 컨테이너 상태
 
 ```
+[클라우드: Hetzner 46.62.155.122]  ← 운영 기준
 thingsboard  Up  — 포트 8080(웹/REST), 1884(MQTT), 7070(Edge RPC)
+
+[로컬 PC: 192.168.0.15]  ← 테스트 전용
+thingsboard  (필요 시 기동)
 ```
 
 ### 1-2. 핵심 설정값
@@ -24,19 +28,20 @@ thingsboard  Up  — 포트 8080(웹/REST), 1884(MQTT), 7070(Edge RPC)
 |---|---|
 | 이미지 | thingsboard/tb-postgres:4.2.1.1 |
 | 큐 방식 | in-memory |
-| 웹 UI | http://localhost:8080 |
-| MQTT 포트 | 1884 (frigate Mosquitto 1883과 분리) |
+| 웹 UI (클라우드) | http://46.62.155.122:8080 |
+| 웹 UI (로컬) | http://localhost:8080 |
+| MQTT 포트 | 1884 (Frigate Mosquitto 1883과 분리) |
 | 데이터 경로 | ./data/db |
 | 로그 경로 | ./data/logs (권한: 777) |
 
-### 1-3. 등록 기기 (전체)
+### 1-3. 등록 기기 — 클라우드 TB 기준 (운영)
 
 | Profile | 기기명 | MQTT Token | 용도 |
 |---------|--------|-----------|------|
-| mobile-cctv | mobile-cctv-site-001 | YSucuQSBC3VNgqEWZk5q | TB-1 초기 검증용 |
-| settop | virtual_settop1 | ySaPv4sU2ZQPJuVYpwK9 | S1/S2 가상 기기 (Android) |
-| ip-camera | virtual_cctv1 | g19dPQxZArjsACP02kRS | S2/S3 가상 기기 |
-| edge-controller | virtual_edge1 | Tdsw3bDUmzRc1Yd3cl3x | S3 가상 기기 |
+| mobile-cctv | mobile-cctv-site-001 | Xl8KVvfv6Gj7DAxEXNz3 | TB-1 초기 검증용 |
+| settop | virtual_settop1 | eMx3nS1nhXnI1CFFhLM7 | S1/S2 가상 기기 (Android) |
+| ip-camera | virtual_cctv1 | 8SOsGhAdlVwXoXkaKzuh | S2/S3 가상 기기 |
+| edge-controller | virtual_edge1 | A3TPceILZWFqZGogYQ3j | S3 가상 기기 |
 
 ### 1-4. 현재 폴더 구조
 
@@ -108,6 +113,37 @@ curl -s -X POST http://localhost:8080/api/auth/login \
 ## 섹션 3 — 변경 이력 (Changelog)
 
 > 최신 항목이 위에 온다. 완료된 항목은 수정하지 않는다.
+
+---
+
+### [2026-04-13] 클라우드 Thingsboard 기동 및 전체 검증 완료 (PASS 70/70)
+
+**배경:** Hetzner CX33 서버(46.62.155.122)에 Thingsboard를 이전하여 운영 기준 환경 구축.
+로컬 Thingsboard는 테스트 전용으로 유지.
+
+**완료 항목:**
+- Hetzner 서버 기본 설정: Docker, Git, Node.js, Claude Code CLI 설치
+- GitHub clone → `/root/projects/siteguard-infra/`
+- Thingsboard 4.2.1.1 클라우드 기동 확인
+- test_01~05 전 항목 통과 — 로컬과 동일한 구조 클라우드에 재현
+- test_03/04 MQTT 토큰·Device ID 클라우드 기준으로 수정
+
+**클라우드 TB MQTT 토큰:**
+| 기기명 | MQTT Token |
+|--------|-----------|
+| mobile-cctv-site-001 | Xl8KVvfv6Gj7DAxEXNz3 |
+| virtual_settop1 | eMx3nS1nhXnI1CFFhLM7 |
+| virtual_cctv1 | 8SOsGhAdlVwXoXkaKzuh |
+| virtual_edge1 | A3TPceILZWFqZGogYQ3j |
+
+**테스트 결과:**
+| 파일 | PASS | FAIL |
+|------|------|------|
+| test_01_startup_check.sh | 4 | 0 |
+| test_02_device_model.sh | 7 | 0 |
+| test_03_mqtt_telemetry.py | 14 | 0 |
+| test_04_alarm_rule.py | 7 | 0 |
+| test_05_virtual_devices.py | 38 | 0 |
 
 ---
 
