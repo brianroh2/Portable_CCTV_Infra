@@ -21,3 +21,12 @@
 - temp_test/ 변경 시: walkthrough.md의 PASS 횟수도 함께 업데이트
 - Frigate↔Thingsboard 통합: 명시적 지시 전까지 시작 안함
 - 새 파일 생성: 먼저 의견 묻고 확인 후 생성 ("만들어줘"는 바로 생성)
+
+## 세션 분리 원칙 (로컬 vs 클라우드)
+
+| 작업 대상 | Claude 세션 | VS Code |
+|----------|------------|---------|
+| Frigate, TB-2 브리지, 에지 스크립트 | **로컬 PC** (visionlinux) | 로컬 폴더 |
+| Thingsboard, go2rtc, 클라우드 서비스 | **Hetzner** (root@46.62.155.122) | Remote SSH: hetzner |
+
+작업 시작 전 확인: "내가 건드리는 서비스가 어디서 실행되는가?"
