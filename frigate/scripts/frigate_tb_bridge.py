@@ -68,6 +68,21 @@ def fetch_frigate_stats():
         print(f"[Frigate REST] 조회 실패: {e}")
         return None
 
+def fetch_camera_status():
+    """카메라별 온라인/오프라인 상태 조회 — Frigate /api/cameras"""
+    try:
+        with urllib.request.urlopen(f"{FRIGATE_API_URL}/api/cameras", timeout=5) as r:
+            cameras = json.loads(r.read())
+        result = {}
+        for name, info in cameras.items():
+            fps = info.get("camera_fps", 0)
+            result[f"cam_{name}_online"] = fps > 0
+            result[f"cam_{name}_fps"]    = round(fps, 1)
+        return result
+    except Exception as e:
+        print(f"[Frigate cameras] 조회 실패: {e}")
+        return {}
+
 def update_state_from_stats(data):
     if not data:
         with state_lock:
@@ -176,6 +191,9 @@ def send_loop():
         with state_lock:
             state["local_storage_gb"] = get_storage_gb()
             payload = dict(state)
+
+        # 카메라별 상태 추가 (cam_cctv1_online, cam_cctv1_fps, ...)
+        payload.update(fetch_camera_status())
 
         # 전송
         tb_client.publish("v1/devices/me/telemetry", json.dumps(payload), qos=1)

@@ -24,3 +24,12 @@ thingsboard/data/
 
 # ── Claude 설정 (로컬 전용) ────────────────────
 **/.claude/
+# ── 가상환경 ───────────────────────────────────
+thingsboard/.venv/
+# ── 임시 작업 폴더 ─────────────────────────────
+temp/
+# ── Frontend 빌드/의존성 ───────────────────────
+app/frontend/node_modules/
+app/frontend/.next/
+# ── 환경변수 (민감정보) ────────────────────────
+app/frontend/.env.local

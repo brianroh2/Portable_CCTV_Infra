@@ -203,6 +203,24 @@ docker-compose의 `shm_size` 값을 카메라 수에 따라 미리 넉넉하게 
 
 ---
 
+**[교훈 7] 로컬에서 동작하는 카메라 설정이 클라우드에서 그대로 동작하지 않는다**
+
+로컬 PC에서 `ffplay rtsp://...`로 카메라가 정상 동작해도,
+Hetzner 클라우드(Tailscale 서브넷 경유)에서는 다른 조건이 적용된다.
+
+| 항목 | 로컬 환경 | 클라우드(Tailscale 경유) |
+|------|---------|----------------------|
+| RTSP 전송 | UDP/TCP 모두 가능 | TCP 강제 필수 (`-rtsp_transport tcp`) |
+| 비트스트림 | 카메라 원본 그대로 OK | 제조사마다 포맷 차이 → MPEG-TS 래핑 필요 |
+| 스트림 종류 | main stream 사용 (감지·녹화) | sub stream 사용 (대역폭 절감) |
+
+**Frigate에서의 함의:**
+- Frigate 자체는 로컬 직접 연결이므로 현재 설정 그대로 유지
+- 클라우드 go2rtc에서 카메라 sub stream을 새로 연결할 때 위 조건 적용
+- 신규 카메라 추가 시 로컬 검증(ffplay) 후 **반드시 Hetzner에서도 별도 검증** 필요
+
+---
+
 **[교훈 6] DB WAL 파일은 방치하면 커진다**
 
 SQLite WAL 모드에서 이벤트가 많이 쌓이면 `frigate.db-wal`이 수백 MB까지 성장한다.
@@ -440,6 +458,35 @@ docker exec mqtt mosquitto_pub \
   -r       # retain 플래그 (재시작 후에도 상태 유지)
 ```
 - **주의:** `localhost:1883`이 아닌 Docker 내부 호스트명(`mqtt`)으로 발행해야 Frigate가 수신함
+
+---
+
+### [TS-06] 클라우드 go2rtc에서 카메라 스트림 불통 (Tailscale 서브넷 경유)
+
+- **현상:** 로컬 ffplay로는 정상, 클라우드 go2rtc에서 17초 후 스트림 종료 또는 오류
+- **원인 1 — UDP RTP 역방향 차단:**
+  Tailscale 서브넷 라우팅에서 RTSP 제어(TCP)는 통과하지만,
+  카메라가 보내는 RTP 영상 데이터(UDP)가 역방향(카메라→Hetzner)으로 돌아오지 못함.
+  제조사별 기본 전송 방식 차이로 인해 일부 카메라만 증상 발생.
+- **원인 2 — 비트스트림 포맷 불일치:**
+  일부 제조사(Vision Hitech 등) H.264 출력이 go2rtc가 기대하는 Annex B 포맷이 아님.
+  `unsupported header: 0000000100000000` 에러 발생.
+- **해결:**
+```yaml
+# go2rtc.yaml — 모든 카메라에 통일 적용
+camera_name: exec:ffmpeg -hide_banner -rtsp_transport tcp \
+  -i rtsp://user:pass@192.168.0.x:554/substream \
+  -c:v copy -f mpegts -
+```
+  - `-rtsp_transport tcp`: UDP 우회, TCP로 RTSP+RTP 통합 전송
+  - `-f mpegts`: MPEG-TS 컨테이너로 래핑 → 비트스트림 포맷 차이 흡수
+- **예방:** 신규 카메라는 처음부터 위 템플릿으로 작성. 로컬 ffplay 확인 후 Hetzner에서 ffprobe로 별도 검증.
+```bash
+# Hetzner에서 신규 카메라 사전 검증
+docker run --rm --network host alexxit/go2rtc:1.9.9 \
+  ffprobe -v quiet -rtsp_transport tcp \
+  -i "rtsp://user:pass@192.168.0.x:554/substream" -show_streams
+```
 
 ---
 
