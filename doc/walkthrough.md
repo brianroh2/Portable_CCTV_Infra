@@ -8,15 +8,16 @@
 
 ## 섹션 1 — 현재 인프라 현황 스냅샷
 
-> 마지막 업데이트: 2026-04-14 (Phase C — Tailscale + go2rtc 완료)
+> 마지막 업데이트: 2026-05-11 (Nginx 프록시 적용, 내부·외부 영상 정상 확인)
 
 ### 1-1. 환경별 역할
 
 | 환경 | 위치 | 역할 | 상태 |
 |------|------|------|------|
 | **클라우드** | Hetzner CX33, 46.62.155.122 (Helsinki) | Thingsboard, go2rtc 운영, 코드 관리 | ✅ 운영 중 |
-| **로컬 PC** | 192.168.0.15 (Tailscale: 100.118.143.92) | Frigate + 카메라 3대, TB-2 브리지 | ✅ 운영 중 |
-| **에지 기기** | settop, edge-controller | 미준비 | 🔲 예정 |
+| **LTE 현장** | 192.168.1.x (M2MNet LT7) | CCTV-1(TVT), CCTV-3(VHT) | ✅ 운영 중 |
+| **로컬 개발PC** | 192.168.1.111 (Linux) / 192.168.1.179 (Windows) | 개발·테스트 | ✅ 임시 연결 |
+| **에지 기기** | RPi 등 | Phase D 예정 | 🔲 예정 |
 
 ### 1-2. 서비스 현황
 
@@ -27,6 +28,7 @@
 | TB-2 브리지 | 로컬 PC (백그라운드) | — | ✅ 운영 중 |
 | Thingsboard 4.2.1.1 | **클라우드** | 8080, 1884, 7070 | ✅ 운영 중 |
 | go2rtc 1.9.9 | **클라우드** | 1984(UI/API), 8555(RTSP) | ✅ 운영 중 |
+| **Nginx** | **클라우드** | **80 (go2rtc 프록시)** | ✅ 운영 중 |
 | Thingsboard 4.2.1.1 | 로컬 PC | 8080, 1884, 7070 | 🔲 필요 시 기동 |
 
 ### 1-3. 클라우드 서버 구성
@@ -59,9 +61,26 @@
 | **Phase B** | Hetzner 서버 구축 + Thingsboard 이전 | ✅ 완료 (2026-04-13) |
 | **TB-2** | Frigate → Thingsboard MQTT 연동 | ✅ 완료 (2026-04-13) |
 | **Phase C** | go2rtc 카메라 스트리밍 | ✅ 완료 (2026-04-14) |
-| **Phase C 잔여** | Thingsboard 대시보드, 방화벽, 에지 기기 연동 | 🔲 예정 |
+| **LTE 현장 연동** | NAT Free, M2MNet DDNS, 포트포워딩, LTE 카메라 → go2rtc | ✅ 완료 (2026-05-11) |
+| **Phase C 잔여** | Thingsboard 대시보드, 기기 상태 연동, 서브스트림 | ✅ 완료 (2026-05-11) |
+| **Nginx 프록시** | ISP DPI 우회 — 외부망 MSE 스트리밍 정상화 | ✅ 완료 (2026-05-11) |
+| **Phase D** | RPi 에지 기기 연동 | 🔲 예정 |
 
-### 1-6. 빠른 접속 명령어
+### 1-6. SiteGuard 관제 화면 접속
+
+| 화면 | URL |
+|------|-----|
+| TB 통합 관리 UI | http://46.62.155.122:8080 (tenant@thingsboard.org / tenant) |
+| 메인 관제 그리드 | http://46.62.155.122:8080/dashboard/bd0e61b0-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
+| CCTV-1 개별 | http://46.62.155.122:8080/dashboard/bd14a340-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
+| CCTV-3 개별 | http://46.62.155.122:8080/dashboard/bd1ce0a0-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
+| go2rtc Web UI (직접) | http://46.62.155.122:1984 |
+| go2rtc (Nginx 경유) | http://46.62.155.122/go2rtc/ |
+
+> **영상 스트리밍 방식:** MSE (Nginx 포트 80 → go2rtc 1984 프록시)  
+> 영상 좌측 상단 "MSE" 레이블은 정상 — 현재 스트리밍 방식 표시
+
+### 1-7. 빠른 접속 명령어
 
 ```bash
 # 클라우드 서버 SSH 접속
@@ -71,7 +90,7 @@ ssh hetzner
 docker ps --format "table {{.Names}}\t{{.Status}}"
 
 # go2rtc 스트림 상태
-curl -s http://localhost:1984/api/streams | python3 -m json.tool
+curl -s http://localhost/go2rtc/api/streams | python3 -m json.tool
 
 # 로컬 PC SSH (Hetzner에서)
 ssh visionlinux
@@ -85,6 +104,105 @@ ssh visionlinux "docker ps --format 'table {{.Names}}\t{{.Status}}'"
 ## 섹션 2 — 변경 이력 (Changelog)
 
 > 최신 항목이 위에 온다. 완료된 항목은 수정하지 않는다.
+
+---
+
+### [2026-05-11] Nginx 역방향 프록시 — 외부망 영상 정상화 완료
+
+**배경:** 외부 PC(LTE망, 기업망 등)에서 go2rtc MSE 스트리밍이 "loading" 상태로 멈추는 현상 발생.  
+원인: ISP/기업망 DPI(딥패킷검사)가 비표준 포트(1984) WebSocket을 차단.
+
+**해결 방법:**  
+Nginx를 포트 80 역방향 프록시로 설치 → `/go2rtc/*` 요청을 `127.0.0.1:1984`로 포워딩.  
+WebSocket Upgrade 헤더를 그대로 통과시켜 MSE 스트리밍 정상화.
+
+**완료 항목:**
+- Nginx 설치 + `/etc/nginx/conf.d/go2rtc.conf` 작성 (WebSocket 프록시 포함)
+- go2rtc STUN: Google → Cloudflare(`stun.cloudflare.com:3478`)
+- camera-grid.html: 접속 URL `http://46.62.155.122/go2rtc`, mode=mse
+- TB jar 재패치(clean replace) + 대시보드 3개 재생성
+- **내부·외부 PC 모두 MSE 영상 정상 재생 확인**
+
+**MSE 레이블:** go2rtc 플레이어 좌측 상단 "MSE" 표시는 현재 스트리밍 방식 안내 — 정상 동작
+
+---
+
+### [2026-05-11] Phase C 완료 — SiteGuard 대시보드 + go2rtc 서브스트림
+
+**배경:** LTE 현장 카메라를 Thingsboard 관제 UI에 완전 통합. Phase C 잔여 작업 전체 완료.
+
+**완료 항목:**
+
+1. **실제 CCTV 기기 등록 (ip-camera 프로파일)**
+   - cctv-1 (TVT TD-9421S4C), cctv-3 (Vision Hitech TBT-Dome F977)
+   - 서버 속성 16개: 메인/서브 스트림 정보 분리 저장
+
+2. **SiteGuard 로고 + camera-grid.html TB 임베드**
+   - Thingsboard ui-ngx jar 패치로 로고 교체 및 정적 HTML 배포
+   - go2rtc MSE 모드 멀티카메라 그리드 UI (2×2~4×5 레이아웃)
+
+3. **대시보드 3개 구축**
+   - 메인 관제 그리드: camera-grid.html iframe
+   - CCTV-1/3 개별: 영상 + 메인/서브 스트림 스펙 나란히 표시
+   - ip-camera 프로파일 기본 대시보드 연결
+
+4. **CCTV 상태 모니터**
+   - TCP 포트 체크 → TB MQTT 60초 주기 (`cctv_status_monitor.py`)
+
+5. **go2rtc 서브스트림 전환**
+   - cctv_1: profile2 (640×480/10fps), cctv_3: Ch2 (640×480/10fps)
+   - 대역폭 20~30배 절감, lazy loading 유지
+
+**접속 링크:**
+- 메인: http://46.62.155.122:8080/dashboard/d665a8e0-4d13-11f1-839b-7d7ca6d1fbf3
+- CCTV-1: http://46.62.155.122:8080/dashboard/d66a63d0-4d13-11f1-839b-7d7ca6d1fbf3
+- CCTV-3: http://46.62.155.122:8080/dashboard/d67168b0-4d13-11f1-839b-7d7ca6d1fbf3
+
+---
+
+### [2026-05-11] LTE 현장 네트워크 구성 확정 및 go2rtc 연동 완료
+
+**배경:** SKT LTE 인바운드 차단 문제를 NAT Free 설정으로 해소하고, 현장 네트워크 구성을 확정.
+
+**완료 항목:**
+
+1. **NAT Free 설정**
+   - SKT 통신사에 NAT Free 요청 적용
+   - 이전: 통신사 인바운드 차단으로 포트포워딩 불가
+   - 이후: DDNS + 포트포워딩으로 외부 직접 접근 가능
+
+2. **M2MNet DDNS 전환**
+   - No-IP(siteguard01.ddns.net) → M2MNet 자체 DDNS(0004312.m2mnet.kr)
+   - LT7 라우터 자체 갱신, 30일 이메일 확인 불필요
+
+3. **현장 네트워크 구성 확정**
+   - LT7 LAN 포트 2개 제약: AP 모드 공유기(ipTIME A2004MU) + POE 스위치로 확장
+   - 모든 기기 192.168.1.x 단일 대역 (이중 NAT 제거)
+   - CCTV-1 (TVT Dome, 192.168.1.51), CCTV-3 (VHT Dome F977, 192.168.1.53)
+
+4. **포트포워딩 설정**
+   - RTSP_TCP1: WAN:554 → 192.168.1.51:554 (CCTV-1)
+   - RTSP_TCP3: WAN:555 → 192.168.1.53:554 (CCTV-3)
+
+5. **go2rtc.yaml 업데이트**
+   - 기존 cctv_1/2/3 (로컬 192.168.0.x) 제거
+   - 신규 cctv_1, cctv_3 (0004312.m2mnet.kr 경유) 설정
+
+6. **문서 업데이트**
+   - `doc/system-architecture-roadmap.md`: 실제 네트워크 구성 반영
+   - `doc/lte-router-considerations.md`: NAT Free 해결, M2MNet DDNS, 실제 포트포워딩 규칙 반영
+   - `go2rtc/go2rtc.yaml`: 신규 스트림 적용
+
+**영상 테스트 결과:**
+| 항목 | 결과 |
+|------|------|
+| CCTV-1 VLC 로컬 재생 | ✅ |
+| CCTV-3 VLC 로컬 재생 | ✅ |
+| 외부 DDNS 접근 | ✅ |
+
+**잔여 항목:**
+- CCTV-1 비밀번호 변경 (보안 ⚠️)
+- Phase C: Thingsboard 대시보드 구성
 
 ---
 

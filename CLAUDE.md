@@ -9,8 +9,11 @@
 | `frigate/` | ✅ Step 1 완료 (2026-04-08) | Frigate 0.17.1 + OpenVINO + 카메라 3대 |
 | `thingsboard/` | ✅ TB-1 완료 (2026-04-09) | Device Profile 3종 + 가상기기 3대 PASS |
 | TB-2 브리지 | ✅ 완료 (2026-04-13) | Frigate REST→클라우드TB MQTT, 60초 주기 |
+| `go2rtc/` | ✅ 완료 (2026-05-11) | LTE DDNS, 서브스트림(640×480/10fps), MSE |
+| TB 대시보드 | ✅ Phase C 완료 (2026-05-11) | 관제 그리드 + 개별 카메라 대시보드 3개 |
+| Nginx 프록시 | ✅ 완료 (2026-05-11) | 포트 80 → go2rtc 1984 프록시, 외부망 MSE 정상화 |
 
-**다음 단계:** Phase C (go2rtc, 에지 기기 연동) — 명시적 지시 후 시작
+**다음 단계:** Phase D (RPi 에지 기기 연동) — 명시적 지시 후 시작
 **상세 현황:** `doc/walkthrough.md` 참조
 
 ## 작업 규칙
