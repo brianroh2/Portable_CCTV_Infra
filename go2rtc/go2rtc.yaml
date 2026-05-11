@@ -5,30 +5,32 @@ rtsp:
   listen: ":8555"  # 클라우드 RTSP 재스트리밍 포트
 
 streams:
-  # ── 카메라 스트림 설정 원칙 ──────────────────────────────────────────
-  # 1. Frigate(로컬)는 AI 감지·녹화용 main stream 사용 → 설정 별도 유지
-  # 2. 여기(go2rtc 클라우드)는 라이브 뷰용 sub stream 사용 → 대역폭 절감
-  # 3. 모든 카메라를 exec:ffmpeg 패턴으로 통일한 이유:
-  #    - Hetzner → 카메라는 Tailscale 서브넷 경유 → UDP RTP 패킷이 역방향으로 돌아오지 못함
-  #    - -rtsp_transport tcp : RTSP 제어 + 영상 데이터를 모두 TCP로 강제 → Tailscale 통과 보장
-  #    - -f mpegts : Vision Hitech 등 일부 카메라가 Annex B 아닌 포맷 출력
-  #                  MPEG-TS 컨테이너로 감싸면 제조사 포맷 차이를 흡수
-  #    - 신규 카메라 추가 시 이 패턴을 기본 템플릿으로 사용할 것
+  # ── LTE 현장 카메라 설정 ────────────────────────────────────────────
+  # DDNS: 0004312.ddns.m2mnet.kr (M2MNet LT7 자체 DDNS, LTE 공인IP 자동갱신)
+  # 포트포워딩: LT7에서 카메라별 WAN 포트 분리 (CCTV-1=554, CCTV-3=555 ...)
+  # exec:ffmpeg 패턴 필수 이유:
+  #   - -rtsp_transport tcp : LTE NAT 환경에서 UDP RTP 역방향 차단 우회
+  #   - -f mpegts           : 제조사별 비트스트림 포맷 차이 흡수 (Annex B 아님)
+  # 신규 카메라 추가 시 이 패턴을 기본 템플릿으로 사용할 것
   # ────────────────────────────────────────────────────────────────────
 
-  # cctv_1: TBT-Dome 765E (192.168.0.6), sub stream = profile2 (640x480)
-  cctv_1: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:11qqaa..A@192.168.0.6:554/profile2 -c:v copy -f mpegts -
+  # CCTV-1: TVT Dome (192.168.1.51) — WAN:554, profile2=sub(640×480,10fps)
+  # ⚠️ 보안: 비밀번호 변경 필요
+  cctv_1: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:11qqaa..A@0004312.m2mnet.kr:554/profile2 -c:v copy -f mpegts -
 
-  # cctv_2: Vision Hitech TBT-Dome F977 (192.168.0.7), sub stream = Ch2 (640x480, 10fps)
-  cctv_2: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:11qqaa..@192.168.0.7:554/Ch2 -c:v copy -f mpegts -
+  # CCTV-3: Vision Hitech Dome F977 (192.168.1.53) — WAN:555, Ch2=sub(640×480,10fps)
+  cctv_3: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:11qqaa..@0004312.m2mnet.kr:555/Ch2 -c:v copy -f mpegts -
 
-  # cctv_3: Vision Hitech TBT-Dome F99D (192.168.0.8), sub stream = Ch2 (640x480, 10fps)
-  cctv_3: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin1:11qqaa..@192.168.0.8:554/Ch2 -c:v copy -f mpegts -
+  # 향후 추가 규칙:
+  # CCTV-4: WAN:556 → 192.168.1.54:554
+  # cctv_4: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:pw@0004312.m2mnet.kr:556/profile1 -c:v copy -f mpegts -
 
-  # cctv_lte1: TVT TD-9421S4C (LTE 라우터 하위, 223.39.99.209:554 → 192.168.1.153:554)
-  # 임시 연결 — DDNS 설정 후 IP를 호스트명으로 교체 예정
-  # profile1 = main stream (DDNS 미설정 임시 구간이므로 화질 우선)
-  cctv_lte1: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:11qqaa..A@siteguard01.ddns.net:554/profile1 -c:v copy -f mpegts -
+webrtc:
+  listen: ":8555"  # WebRTC 미디어 UDP 포트 (RTSP TCP와 공유, 외부 방화벽에서 UDP 8555 개방 필요)
+  ice_servers:
+    - urls: [stun:stun.cloudflare.com:3478]
+  candidates:
+    - 46.62.155.122  # Hetzner 공인 IP — 외부 ICE candidate 명시
 
 log:
   level: info
