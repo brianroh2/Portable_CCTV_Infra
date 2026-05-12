@@ -198,104 +198,16 @@ def build_grid_dashboard():
     }
 
 
-def build_camera_list_dashboard(cameras):
-    """카메라 목록 대시보드 — 필터 + 테이블"""
-    total = len(cameras)
-    tk = 'style="color:#888;width:10%;padding:2px 6px 2px 0;white-space:nowrap;"'
-    tv = 'style="color:#ddd;font-size:11px;"'
-
-    rows_html = ""
-    for cam in cameras:
-        ddns = _ddns(cam)
-        port = _port(cam)
-        rows_html += f"""
-        <tr>
-          <td style="text-align:center;"><span style="color:#4caf50;font-size:14px;" title="정상">●</span></td>
-          <td style="color:#4db6ac;font-weight:500;">{cam['name']}</td>
-          <td style="color:#ccc;">{cam['group']}</td>
-          <td style="color:#ccc;">{cam['customer']}</td>
-          <td style="font-size:10px;line-height:1.6;">{cam['mac_address']}<br><span style="color:#888;">{cam['internal_ip']}</span></td>
-          <td style="text-align:center;"><span style="background:#1a3a1a;color:#4caf50;padding:2px 10px;border-radius:10px;font-size:11px;">ON ●</span></td>
-          <td style="color:#888;font-size:11px;">— GB</td>
-          <td style="text-align:center;"><span style="background:#1a3a1a;color:#4caf50;padding:2px 10px;border-radius:10px;font-size:11px;">ON ●</span></td>
-          <td style="text-align:center;font-size:18px;cursor:pointer;" title="상세 설정">⚙️</td>
-        </tr>"""
-
-    filter_opts_group = "".join(
-        f'<option value="{cam["group"]}">{cam["group"]}</option>'
-        for cam in {c["group"]: c for c in cameras}.values()
+def build_camera_list_dashboard():
+    """카메라 목록 대시보드 — camera-list.html iframe (TB API 동적 로드)"""
+    card_html = (
+        '<iframe src="/camera-list.html" '
+        'style="width:100%;height:100%;border:none;display:block;" '
+        'allowfullscreen></iframe>'
     )
-    filter_opts_customer = "".join(
-        f'<option value="{cam["customer"]}">{cam["customer"]}</option>'
-        for cam in {c["customer"]: c for c in cameras}.values()
-    )
-
-    card_html = f"""
-<div style="font-family:'Segoe UI',sans-serif;background:#0f1117;color:#ccc;
-            padding:16px;height:100%;box-sizing:border-box;overflow:auto;">
-
-  <!-- 헤더 -->
-  <div style="display:flex;align-items:center;margin-bottom:14px;">
-    <span style="color:#4db6ac;font-size:14px;font-weight:600;">📷 SiteGuard 카메라 관제</span>
-    <span style="margin-left:16px;font-size:11px;color:#888;">
-      전체 {total}대 &nbsp;|&nbsp;
-      <span style="color:#4caf50;">● 정상 {total}</span> &nbsp;|&nbsp;
-      <span style="color:#f44336;">● 오류 0</span>
-    </span>
-  </div>
-
-  <!-- 필터 바 -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
-                   padding:4px 8px;border-radius:4px;font-size:11px;">
-      <option value="">그룹: 전체</option>{filter_opts_group}
-    </select>
-    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
-                   padding:4px 8px;border-radius:4px;font-size:11px;">
-      <option value="">가입자: 전체</option>{filter_opts_customer}
-    </select>
-    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
-                   padding:4px 8px;border-radius:4px;font-size:11px;">
-      <option value="">유형: 전체</option>
-      <option>Dome</option><option>Bullet</option><option>기타</option>
-    </select>
-    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
-                   padding:4px 8px;border-radius:4px;font-size:11px;">
-      <option value="">라이브: 전체</option><option>ON</option><option>OFF</option>
-    </select>
-    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
-                   padding:4px 8px;border-radius:4px;font-size:11px;">
-      <option value="">SD: 전체</option><option>정상</option><option>경고</option><option>가득참</option>
-    </select>
-    <span style="flex:1;"></span>
-    <button style="background:#1a3a4a;color:#4db6ac;border:1px solid #2a5a6a;
-                   padding:4px 12px;border-radius:4px;font-size:11px;cursor:pointer;">
-      + 카메라 등록
-    </button>
-  </div>
-
-  <!-- 목록 테이블 -->
-  <table style="width:100%;border-collapse:collapse;font-size:12px;">
-    <thead>
-      <tr style="border-bottom:1px solid #2a2a4a;">
-        <th style="color:#888;font-weight:500;padding:8px;text-align:center;width:40px;">상태</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">카메라명</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">그룹</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">가입자</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">MAC / IP</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:center;">라이브</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">SD 상태</th>
-        <th style="color:#888;font-weight:500;padding:8px;text-align:center;">감지</th>
-        <th style="width:40px;"></th>
-      </tr>
-    </thead>
-    <tbody>{rows_html}</tbody>
-  </table>
-</div>"""
-
     wid, w = make_widget(
         "system.cards.html_card", "latest", "SiteGuard 카메라 목록",
-        {"cardHtml": card_html, "cardCss": ""},
+        {"cardHtml": card_html, "cardCss": "html,body{margin:0;padding:0;overflow:hidden;}"},
         row=0, col=0, sx=24, sy=18,
     )
 
@@ -551,7 +463,7 @@ def main():
     print(f"   OK: {grid_db_id}")
 
     print("\n[5/6] 카메라 목록 대시보드 생성...")
-    _, list_dashboard = build_camera_list_dashboard(CAMERAS)
+    _, list_dashboard = build_camera_list_dashboard()
     r = requests.post(f"{TB_URL}/api/dashboard", headers=h(token), json=list_dashboard)
     if r.status_code != 200:
         print(f"   FAIL: {r.status_code} — {r.text[:300]}")
