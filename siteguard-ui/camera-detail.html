@@ -192,7 +192,9 @@ input.edit-field:focus, select.edit-field:focus { outline: none; border-color: #
 const token    = localStorage.getItem('TB-jwt_token') ||
                  localStorage.getItem('jwt_token') ||
                  localStorage.getItem('tb_ui_token');
-const deviceId = new URLSearchParams(location.search).get('id');
+const _params   = new URLSearchParams(location.search);
+let   deviceId  = _params.get('id');   // id= 우선, 없으면 name=으로 조회
+const deviceName_param = _params.get('name');
 
 let devName = '';
 let attrs   = {};   // 현재 로드된 속성 맵
@@ -518,9 +520,20 @@ async function loadDevice() {
       '<p style="color:#f44;padding:20px;text-align:center">⚠️ TB 로그인 후 이용하세요</p>';
     return;
   }
+  // id= 없으면 name= 으로 기기 조회
+  if (!deviceId && deviceName_param) {
+    try {
+      const dev0 = await apiFetch(`/api/tenant/device?deviceName=${encodeURIComponent(deviceName_param)}`);
+      deviceId = dev0.id.id;
+    } catch (e) {
+      document.getElementById('sections').innerHTML =
+        `<p style="color:#f44;padding:20px;text-align:center">⚠️ 기기를 찾을 수 없습니다: ${deviceName_param}</p>`;
+      return;
+    }
+  }
   if (!deviceId) {
     document.getElementById('sections').innerHTML =
-      '<p style="color:#f44;padding:20px;text-align:center">⚠️ 기기 ID가 없습니다 (id= 파라미터 필요)</p>';
+      '<p style="color:#f44;padding:20px;text-align:center">⚠️ id= 또는 name= 파라미터가 필요합니다</p>';
     return;
   }
   try {
