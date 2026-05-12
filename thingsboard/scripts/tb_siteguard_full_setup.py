@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# SiteGuard Thingsboard 전체 설정
-# 실행: python tb_siteguard_full_setup.py
-# 수행: cctv-1/cctv-3 서버속성 추가 + 멀티카메라 그리드 대시보드 생성 + 기기 프로파일 대시보드
+# SiteGuard Thingsboard 전체 설정 (Phase C 개선판)
+# 수행: 기기 서버속성 27개 + 카메라 목록 대시보드 + 개별 카메라 대시보드 (5섹션)
 
 import requests
 import json
 import uuid
+from datetime import datetime, timezone
 
 TB_URL = "http://localhost:8080"
 TENANT_USER = "tenant@thingsboard.org"
@@ -17,39 +17,64 @@ CAMERAS = [
         "name": "cctv-1",
         "label": "CCTV-1 TVT Dome",
         "stream": "cctv_1",
+        # 기기 식별
+        "site": "개발office 현장",
+        "group": "개발자",
+        "customer": "dev",
         "model": "TVT TD-9421S4C",
-        "internal_ip": "192.168.1.51",
-        "wan_port": 554,
-        "main_rtsp_profile": "profile1",
-        "main_resolution": "1920x1080",
-        "main_fps": 30,
-        "sub_rtsp_profile": "profile2",
-        "sub_resolution": "640x480",
-        "sub_fps": 10,
-        "codec": "H.264",
-        "audio": "없음",
+        "cam_type": "Dome",
         "location": "LTE 라우터 직접 연결 (포트1)",
-        "ddns": "0004312.m2mnet.kr",
+        "mac_address": "none",
+        "internal_ip": "192.168.1.51",
+        "connection": "0004312.m2mnet.kr:554",
+        # 스트림 프로파일
+        "main_rtsp_profile": "profile1",
+        "sub_rtsp_profile": "profile2",
+        # Frigate 감지 기본값
+        "frigate_enabled": True,
+        "frigate_detect_fps": 5,
+        "frigate_min_score": 0.5,
+        "frigate_min_area": 1000,
+        "frigate_record_pre": 3,
+        "frigate_record_post": 5,
+        "frigate_record_days": 7,
+        "frigate_notify": True,
     },
     {
         "name": "cctv-3",
         "label": "CCTV-3 VHT Dome F977",
         "stream": "cctv_3",
+        # 기기 식별
+        "site": "개발office 현장",
+        "group": "개발자",
+        "customer": "dev",
         "model": "Vision Hitech TBT-Dome F977",
-        "internal_ip": "192.168.1.53",
-        "wan_port": 555,
-        "main_rtsp_profile": "Ch1",
-        "main_resolution": "1920x1080",
-        "main_fps": 30,
-        "sub_rtsp_profile": "Ch2",
-        "sub_resolution": "640x480",
-        "sub_fps": 10,
-        "codec": "H.264",
-        "audio": "없음",
+        "cam_type": "Dome",
         "location": "POE 스위치 연결 (192.168.1.53)",
-        "ddns": "0004312.m2mnet.kr",
+        "mac_address": "f97",
+        "internal_ip": "192.168.1.53",
+        "connection": "0004312.m2mnet.kr:555",
+        # 스트림 프로파일
+        "main_rtsp_profile": "Ch1",
+        "sub_rtsp_profile": "Ch2",
+        # Frigate 감지 기본값
+        "frigate_enabled": True,
+        "frigate_detect_fps": 5,
+        "frigate_min_score": 0.5,
+        "frigate_min_area": 1000,
+        "frigate_record_pre": 3,
+        "frigate_record_post": 5,
+        "frigate_record_days": 7,
+        "frigate_notify": True,
     },
 ]
+
+# DDNS/포트 파싱 헬퍼
+def _ddns(cam):
+    return cam["connection"].split(":")[0]
+
+def _port(cam):
+    return cam["connection"].split(":")[1]
 
 
 def login():
@@ -127,21 +152,29 @@ def make_widget(type_fqn, widget_type, title, settings, row, col, sx, sy,
     return wid, w
 
 
+def _grid_settings():
+    return {
+        "columns": 24,
+        "color": "#0f1117",
+        "backgroundSize": "100%",
+        "backgroundImageUrl": "",
+        "mobileAutoFillHeight": False,
+        "mobileRowHeight": 70,
+    }
+
+
 def build_grid_dashboard():
-    """멀티 카메라 그리드 대시보드 — camera-grid.html iframe 임베드"""
+    """메인 관제 그리드 — camera-grid.html iframe"""
     card_html = (
         '<iframe src="/camera-grid.html" '
         'style="width:100%;height:100%;border:none;display:block;" '
         'allowfullscreen></iframe>'
     )
-    card_css = "html,body{margin:0;padding:0;overflow:hidden;}"
-
     wid, w = make_widget(
         "system.cards.html_card", "latest", "SiteGuard 현장 관제",
-        {"cardHtml": card_html, "cardCss": card_css},
+        {"cardHtml": card_html, "cardCss": "html,body{margin:0;padding:0;overflow:hidden;}"},
         row=0, col=0, sx=24, sy=21,
     )
-
     return wid, {
         "title": "SiteGuard 현장 관제",
         "configuration": {
@@ -154,14 +187,131 @@ def build_grid_dashboard():
                     "layouts": {
                         "main": {
                             "widgets": {wid: {"sizeX": 24, "sizeY": 21, "row": 0, "col": 0}},
-                            "gridSettings": {
-                                "columns": 24,
-                                "color": "#0f1117",
-                                "backgroundSize": "100%",
-                                "backgroundImageUrl": "",
-                                "mobileAutoFillHeight": False,
-                                "mobileRowHeight": 70,
-                            },
+                            "gridSettings": _grid_settings(),
+                        }
+                    },
+                }
+            },
+            "entityAliases": {},
+            "filters": {},
+        },
+    }
+
+
+def build_camera_list_dashboard(cameras):
+    """카메라 목록 대시보드 — 필터 + 테이블"""
+    total = len(cameras)
+    tk = 'style="color:#888;width:10%;padding:2px 6px 2px 0;white-space:nowrap;"'
+    tv = 'style="color:#ddd;font-size:11px;"'
+
+    rows_html = ""
+    for cam in cameras:
+        ddns = _ddns(cam)
+        port = _port(cam)
+        rows_html += f"""
+        <tr>
+          <td style="text-align:center;"><span style="color:#4caf50;font-size:14px;" title="정상">●</span></td>
+          <td style="color:#4db6ac;font-weight:500;">{cam['name']}</td>
+          <td style="color:#ccc;">{cam['group']}</td>
+          <td style="color:#ccc;">{cam['customer']}</td>
+          <td style="font-size:10px;line-height:1.6;">{cam['mac_address']}<br><span style="color:#888;">{cam['internal_ip']}</span></td>
+          <td style="text-align:center;"><span style="background:#1a3a1a;color:#4caf50;padding:2px 10px;border-radius:10px;font-size:11px;">ON ●</span></td>
+          <td style="color:#888;font-size:11px;">— GB</td>
+          <td style="text-align:center;"><span style="background:#1a3a1a;color:#4caf50;padding:2px 10px;border-radius:10px;font-size:11px;">ON ●</span></td>
+          <td style="text-align:center;font-size:18px;cursor:pointer;" title="상세 설정">⚙️</td>
+        </tr>"""
+
+    filter_opts_group = "".join(
+        f'<option value="{cam["group"]}">{cam["group"]}</option>'
+        for cam in {c["group"]: c for c in cameras}.values()
+    )
+    filter_opts_customer = "".join(
+        f'<option value="{cam["customer"]}">{cam["customer"]}</option>'
+        for cam in {c["customer"]: c for c in cameras}.values()
+    )
+
+    card_html = f"""
+<div style="font-family:'Segoe UI',sans-serif;background:#0f1117;color:#ccc;
+            padding:16px;height:100%;box-sizing:border-box;overflow:auto;">
+
+  <!-- 헤더 -->
+  <div style="display:flex;align-items:center;margin-bottom:14px;">
+    <span style="color:#4db6ac;font-size:14px;font-weight:600;">📷 SiteGuard 카메라 관제</span>
+    <span style="margin-left:16px;font-size:11px;color:#888;">
+      전체 {total}대 &nbsp;|&nbsp;
+      <span style="color:#4caf50;">● 정상 {total}</span> &nbsp;|&nbsp;
+      <span style="color:#f44336;">● 오류 0</span>
+    </span>
+  </div>
+
+  <!-- 필터 바 -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
+                   padding:4px 8px;border-radius:4px;font-size:11px;">
+      <option value="">그룹: 전체</option>{filter_opts_group}
+    </select>
+    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
+                   padding:4px 8px;border-radius:4px;font-size:11px;">
+      <option value="">가입자: 전체</option>{filter_opts_customer}
+    </select>
+    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
+                   padding:4px 8px;border-radius:4px;font-size:11px;">
+      <option value="">유형: 전체</option>
+      <option>Dome</option><option>Bullet</option><option>기타</option>
+    </select>
+    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
+                   padding:4px 8px;border-radius:4px;font-size:11px;">
+      <option value="">라이브: 전체</option><option>ON</option><option>OFF</option>
+    </select>
+    <select style="background:#1a1a2e;color:#ccc;border:1px solid #2a2a4a;
+                   padding:4px 8px;border-radius:4px;font-size:11px;">
+      <option value="">SD: 전체</option><option>정상</option><option>경고</option><option>가득참</option>
+    </select>
+    <span style="flex:1;"></span>
+    <button style="background:#1a3a4a;color:#4db6ac;border:1px solid #2a5a6a;
+                   padding:4px 12px;border-radius:4px;font-size:11px;cursor:pointer;">
+      + 카메라 등록
+    </button>
+  </div>
+
+  <!-- 목록 테이블 -->
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead>
+      <tr style="border-bottom:1px solid #2a2a4a;">
+        <th style="color:#888;font-weight:500;padding:8px;text-align:center;width:40px;">상태</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">카메라명</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">그룹</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">가입자</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">MAC / IP</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:center;">라이브</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:left;">SD 상태</th>
+        <th style="color:#888;font-weight:500;padding:8px;text-align:center;">감지</th>
+        <th style="width:40px;"></th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+</div>"""
+
+    wid, w = make_widget(
+        "system.cards.html_card", "latest", "SiteGuard 카메라 목록",
+        {"cardHtml": card_html, "cardCss": ""},
+        row=0, col=0, sx=24, sy=18,
+    )
+
+    return wid, {
+        "title": "SiteGuard 카메라 목록",
+        "configuration": {
+            "description": "SiteGuard 카메라 목록 대시보드",
+            "widgets": {wid: w},
+            "states": {
+                "default": {
+                    "name": "카메라 목록",
+                    "root": True,
+                    "layouts": {
+                        "main": {
+                            "widgets": {wid: {"sizeX": 24, "sizeY": 18, "row": 0, "col": 0}},
+                            "gridSettings": _grid_settings(),
                         }
                     },
                 }
@@ -173,7 +323,7 @@ def build_grid_dashboard():
 
 
 def build_device_dashboard(cam):
-    """개별 기기 대시보드 — 영상 + 스펙 테이블"""
+    """개별 기기 대시보드 — 라이브뷰 + 5섹션 상세 패널"""
     alias_id = str(uuid.uuid4())
     alias = {
         alias_id: {
@@ -187,61 +337,125 @@ def build_device_dashboard(cam):
         }
     }
 
+    ddns = _ddns(cam)
+    port = _port(cam)
+    rtsp_main = f"rtsp://{ddns}:{port}/{cam['main_rtsp_profile']}"
+    rtsp_sub = f"rtsp://{ddns}:{port}/{cam['sub_rtsp_profile']}"
     stream_url = f"{GO2RTC_EXT}/stream.html?src={cam['stream']}&mode=mse"
+
     video_html = (
         f'<div style="width:100%;height:100%;background:#000;overflow:hidden;">'
         f'<iframe src="{stream_url}" style="width:100%;height:100%;border:none;" allowfullscreen></iframe>'
         f'</div>'
     )
-    video_css = "html,body{margin:0;padding:0;overflow:hidden;}"
 
-    td_k = 'style="padding:4px 8px 4px 0;color:#888;width:42%;vertical-align:top;"'
-    td_v = 'style="color:#ddd;font-size:11px;"'
-    td_h = 'style="padding:8px 0 4px;color:#4db6ac;font-size:11px;font-weight:700;letter-spacing:.5px;" colspan="2"'
-    attrs_html = f"""<div style="padding:12px;font-family:sans-serif;color:#ccc;background:#0f1117;height:100%;overflow:auto;">
-  <h3 style="color:#4db6ac;margin:0 0 10px;font-size:13px;border-bottom:1px solid #2a2a4a;padding-bottom:6px;">{cam['label']} — 기기 정보</h3>
-  <table style="width:100%;border-collapse:collapse;font-size:12px;">
-    <tr><td {td_k}>모델</td><td {td_v}>{cam['model']}</td></tr>
-    <tr><td {td_k}>내부 IP</td><td {td_v}>{cam['internal_ip']}</td></tr>
-    <tr><td {td_k}>WAN 포트</td><td {td_v}>{cam['wan_port']}</td></tr>
-    <tr><td {td_k}>코덱</td><td {td_v}>{cam['codec']}</td></tr>
-    <tr><td {td_k}>오디오</td><td {td_v}>{cam['audio']}</td></tr>
-    <tr><td {td_k}>위치</td><td {td_v}>{cam['location']}</td></tr>
-    <tr><td {td_k}>DDNS</td><td {td_v}>{cam['ddns']}</td></tr>
-    <tr><td {td_h}>▶ 메인 스트림 (1080p)</td></tr>
-    <tr><td {td_k}>프로파일</td><td {td_v}>{cam['main_rtsp_profile']}</td></tr>
-    <tr><td {td_k}>해상도</td><td {td_v}>{cam['main_resolution']}</td></tr>
-    <tr><td {td_k}>프레임</td><td {td_v}>{cam['main_fps']} fps</td></tr>
-    <tr><td {td_k}>외부 RTSP</td><td style="color:#aaa;font-size:10px;word-break:break-all;">rtsp://{cam['ddns']}:{cam['wan_port']}/{cam['main_rtsp_profile']}</td></tr>
-    <tr><td {td_h}>▶ 서브 스트림 ★현재 사용 (go2rtc)</td></tr>
-    <tr><td {td_k}>프로파일</td><td {td_v}>{cam['sub_rtsp_profile']}</td></tr>
-    <tr><td {td_k}>해상도</td><td {td_v}>{cam['sub_resolution']}</td></tr>
-    <tr><td {td_k}>프레임</td><td {td_v}>{cam['sub_fps']} fps</td></tr>
-    <tr><td {td_k}>외부 RTSP</td><td style="color:#aaa;font-size:10px;word-break:break-all;">rtsp://{cam['ddns']}:{cam['wan_port']}/{cam['sub_rtsp_profile']}</td></tr>
+    s_head = ('background:#1a1a2e;color:#4db6ac;font-size:11px;font-weight:700;'
+              'letter-spacing:.5px;padding:6px 8px;margin-top:10px;'
+              'border-left:3px solid #4db6ac;')
+    s_tbl = 'width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;'
+    td_k = 'color:#888;width:42%;padding:3px 8px 3px 0;vertical-align:top;'
+    td_v = 'color:#ddd;'
+
+    frigate_on_color = "#4caf50" if cam["frigate_enabled"] else "#888"
+    notify_on_color = "#4caf50" if cam["frigate_notify"] else "#888"
+
+    detail_html = f"""
+<div style="font-family:'Segoe UI',sans-serif;color:#ccc;background:#0f1117;
+            height:100%;overflow-y:auto;padding:12px;box-sizing:border-box;">
+
+  <div style="color:#4db6ac;font-size:14px;font-weight:600;margin-bottom:12px;
+              border-bottom:1px solid #2a2a4a;padding-bottom:8px;">
+    {cam['label']}
+    &nbsp;<span style="color:#4caf50;font-size:11px;">● 정상</span>
+  </div>
+
+  <!-- ① 기기 식별 -->
+  <div style="{s_head}">① 기기 식별</div>
+  <table style="{s_tbl}">
+    <tr><td style="{td_k}">현장(Site)</td><td style="{td_v}">{cam['site']}</td></tr>
+    <tr><td style="{td_k}">그룹</td><td style="{td_v}">{cam['group']}</td></tr>
+    <tr><td style="{td_k}">가입자</td><td style="{td_v}">{cam['customer']}</td></tr>
+    <tr><td style="{td_k}">모델</td><td style="{td_v}">{cam['model']}</td></tr>
+    <tr><td style="{td_k}">유형</td><td style="{td_v}">{cam['cam_type']}</td></tr>
+    <tr><td style="{td_k}">위치</td><td style="{td_v}">{cam['location']}</td></tr>
+    <tr><td style="{td_k}">MAC 주소</td><td style="{td_v}">{cam['mac_address']}</td></tr>
+    <tr><td style="{td_k}">내부 IP</td><td style="{td_v}">{cam['internal_ip']}</td></tr>
+    <tr><td style="{td_k}">외부 연결</td><td style="{td_v}">{cam['connection']}</td></tr>
   </table>
+
+  <!-- ② 시스템 정보 -->
+  <div style="{s_head}">② 시스템 정보</div>
+  <table style="{s_tbl}">
+    <tr><td style="{td_k}">펌웨어 버전</td>
+        <td style="color:#888;font-style:italic;">— ONVIF 갱신 필요</td></tr>
+    <tr><td style="{td_k}">펌웨어 날짜</td>
+        <td style="color:#888;font-style:italic;">— ONVIF 갱신 필요</td></tr>
+  </table>
+
+  <!-- ③ 에지 저장소 -->
+  <div style="{s_head}">③ 에지 저장소</div>
+  <table style="{s_tbl}">
+    <tr><td style="{td_k}">카메라 SD</td>
+        <td style="color:#888;font-style:italic;">— 에지 스크립트 대기중</td></tr>
+    <tr><td style="{td_k}">에지 PC</td>
+        <td style="color:#888;font-style:italic;">— 에지 스크립트 대기중</td></tr>
+  </table>
+
+  <!-- ④ 스트림 URL -->
+  <div style="{s_head}">④ 스트림 URL</div>
+  <table style="{s_tbl}">
+    <tr><td style="{td_k}">메인 RTSP</td>
+        <td style="color:#aaa;font-size:10px;word-break:break-all;">{rtsp_main}</td></tr>
+    <tr><td style="{td_k}">서브 RTSP</td>
+        <td style="color:#aaa;font-size:10px;word-break:break-all;">{rtsp_sub}</td></tr>
+    <tr><td style="{td_k}">라이브뷰</td>
+        <td style="color:#aaa;font-size:10px;word-break:break-all;">{stream_url}</td></tr>
+  </table>
+
+  <!-- ⑤ Frigate 감지 설정 -->
+  <div style="{s_head}">⑤ Frigate 감지 설정</div>
+  <table style="{s_tbl}">
+    <tr><td style="{td_k}">감지 활성화</td>
+        <td style="color:{frigate_on_color};font-weight:600;">{'ON ●' if cam['frigate_enabled'] else 'OFF ○'}</td></tr>
+    <tr><td style="{td_k}">감지 fps</td><td style="{td_v}">{cam['frigate_detect_fps']}</td></tr>
+    <tr><td style="{td_k}">신뢰도 임계값</td><td style="{td_v}">{cam['frigate_min_score']}</td></tr>
+    <tr><td style="{td_k}">최소 객체 면적</td><td style="{td_v}">{cam['frigate_min_area']} px²</td></tr>
+    <tr><td style="{td_k}">녹화 전 (초)</td><td style="{td_v}">{cam['frigate_record_pre']}</td></tr>
+    <tr><td style="{td_k}">녹화 후 (초)</td><td style="{td_v}">{cam['frigate_record_post']}</td></tr>
+    <tr><td style="{td_k}">보관 기간 (일)</td><td style="{td_v}">{cam['frigate_record_days']}</td></tr>
+    <tr><td style="{td_k}">알림</td>
+        <td style="color:{notify_on_color};font-weight:600;">{'ON ●' if cam['frigate_notify'] else 'OFF ○'}</td></tr>
+  </table>
+
+  <div style="margin-top:16px;padding-top:10px;border-top:1px solid #2a2a2a;">
+    <button style="background:#3a1a1a;color:#f44336;border:1px solid #5a2a2a;
+                   padding:5px 14px;border-radius:4px;font-size:11px;cursor:pointer;">
+      🗑️ 카메라 삭제
+    </button>
+  </div>
 </div>"""
 
     wid_v, w_v = make_widget(
         "system.cards.html_card", "latest", f"{cam['label']} 라이브",
-        {"cardHtml": video_html, "cardCss": video_css},
-        row=0, col=0, sx=16, sy=12,
+        {"cardHtml": video_html, "cardCss": "html,body{margin:0;padding:0;overflow:hidden;}"},
+        row=0, col=0, sx=16, sy=16,
     )
     wid_a, w_a = make_widget(
         "system.cards.html_card", "latest", f"{cam['label']} 기기 정보",
-        {"cardHtml": attrs_html, "cardCss": ""},
-        row=0, col=16, sx=8, sy=12,
+        {"cardHtml": detail_html, "cardCss": ""},
+        row=0, col=16, sx=8, sy=16,
     )
 
     widgets_def = {wid_v: w_v, wid_a: w_a}
     layout_w = {
-        wid_v: {"sizeX": 16, "sizeY": 12, "row": 0, "col": 0},
-        wid_a: {"sizeX": 8,  "sizeY": 12, "row": 0, "col": 16},
+        wid_v: {"sizeX": 16, "sizeY": 16, "row": 0, "col": 0},
+        wid_a: {"sizeX": 8,  "sizeY": 16, "row": 0, "col": 16},
     }
 
     return {
         "title": f"SiteGuard — {cam['label']}",
         "configuration": {
-            "description": f"{cam['label']} 영상 및 기기 정보",
+            "description": f"{cam['label']} 영상 및 5섹션 기기 정보",
             "widgets": widgets_def,
             "states": {
                 "default": {
@@ -250,14 +464,7 @@ def build_device_dashboard(cam):
                     "layouts": {
                         "main": {
                             "widgets": layout_w,
-                            "gridSettings": {
-                                "columns": 24,
-                                "color": "#0f1117",
-                                "backgroundSize": "100%",
-                                "backgroundImageUrl": "",
-                                "mobileAutoFillHeight": False,
-                                "mobileRowHeight": 70,
-                            },
+                            "gridSettings": _grid_settings(),
                         }
                     },
                 }
@@ -268,66 +475,73 @@ def build_device_dashboard(cam):
     }
 
 
-def set_device_dashboard(token, device_id, dashboard_id):
-    """기기 관련 대시보드 ID를 서버 속성에 저장 (TB 기기 상세 화면 연동용)"""
-    set_server_attributes(token, device_id, {"device_dashboard_id": dashboard_id})
-
-
-def update_profile_dashboard(token, profile_id, dashboard_id):
-    """ip-camera 프로파일에 기본 대시보드 설정"""
-    r = requests.get(f"{TB_URL}/api/deviceProfile/{profile_id}", headers=h(token))
-    r.raise_for_status()
-    profile = r.json()
-    profile["defaultDashboardId"] = {"id": dashboard_id, "entityType": "DASHBOARD"}
-    r2 = requests.post(f"{TB_URL}/api/deviceProfile", headers=h(token), json=profile)
-    r2.raise_for_status()
-
-
 def main():
-    print("=== SiteGuard Thingsboard 전체 설정 ===\n")
+    print("=== SiteGuard Thingsboard 전체 설정 (Phase C 개선판) ===\n")
 
-    print("[1/5] TB 로그인...")
+    print("[1/6] TB 로그인...")
     token = login()
     print("   OK")
 
-    print("\n[2/5] 기기 서버 속성 설정...")
+    print("\n[2/6] 기기 서버 속성 설정 (27개)...")
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for cam in CAMERAS:
         dev_id = get_device_id(token, cam["name"])
         if not dev_id:
             print(f"   SKIP: 기기 없음 — {cam['name']}")
             continue
+        ddns = _ddns(cam)
+        port = _port(cam)
         attrs = {
-            "model":                cam["model"],
-            "internal_ip":          cam["internal_ip"],
-            "wan_port":             cam["wan_port"],
-            "codec":                cam["codec"],
-            "audio":                cam["audio"],
-            "location":             cam["location"],
-            "ddns":                 cam["ddns"],
-            # 메인 스트림
-            "main_rtsp_profile":    cam["main_rtsp_profile"],
-            "main_resolution":      cam["main_resolution"],
-            "main_fps":             cam["main_fps"],
-            "rtsp_url_main":        f"rtsp://{cam['ddns']}:{cam['wan_port']}/{cam['main_rtsp_profile']}",
-            # 서브 스트림 (go2rtc 현재 사용)
-            "sub_rtsp_profile":     cam["sub_rtsp_profile"],
-            "sub_resolution":       cam["sub_resolution"],
-            "sub_fps":              cam["sub_fps"],
-            "rtsp_url_external":    f"rtsp://{cam['ddns']}:{cam['wan_port']}/{cam['sub_rtsp_profile']}",
-            "stream_url":           f"{GO2RTC_EXT}/stream.html?src={cam['stream']}&mode=mse",
+            # 기기 식별 (10)
+            "site":             cam["site"],
+            "group":            cam["group"],
+            "customer":         cam["customer"],
+            "model":            cam["model"],
+            "cam_type":         cam["cam_type"],
+            "location":         cam["location"],
+            "mac_address":      cam["mac_address"],
+            "internal_ip":      cam["internal_ip"],
+            "connection":       cam["connection"],
+            "activated_at":     now_iso,
+            # 시스템 (2)
+            "firmware_version": "",
+            "firmware_date":    "",
+            # 저장소 (4) — 에지 스크립트 자동 갱신
+            "sd_total_gb":      0,
+            "sd_used_gb":       0,
+            "edge_total_gb":    0,
+            "edge_used_gb":     0,
+            # 스트림 URL (3)
+            "rtsp_url_main":    f"rtsp://{ddns}:{port}/{cam['main_rtsp_profile']}",
+            "rtsp_url_sub":     f"rtsp://{ddns}:{port}/{cam['sub_rtsp_profile']}",
+            "stream_url":       f"{GO2RTC_EXT}/stream.html?src={cam['stream']}&mode=mse",
+            # Frigate 감지 (8)
+            "frigate_enabled":      cam["frigate_enabled"],
+            "frigate_detect_fps":   cam["frigate_detect_fps"],
+            "frigate_min_score":    cam["frigate_min_score"],
+            "frigate_min_area":     cam["frigate_min_area"],
+            "frigate_record_pre":   cam["frigate_record_pre"],
+            "frigate_record_post":  cam["frigate_record_post"],
+            "frigate_record_days":  cam["frigate_record_days"],
+            "frigate_notify":       cam["frigate_notify"],
         }
         set_server_attributes(token, dev_id, attrs)
         print(f"   OK: {cam['name']} — {len(attrs)}개 속성")
 
-    print("\n[3/5] 기존 SiteGuard 대시보드 정리...")
-    for title in ["SiteGuard 현장 관제", "SiteGuard — CCTV-1 TVT Dome",
-                  "SiteGuard — CCTV-3 VHT Dome F977"]:
+    print("\n[3/6] 기존 SiteGuard 대시보드 정리...")
+    titles_to_delete = [
+        "SiteGuard 현장 관제",
+        "SiteGuard 카메라 목록",
+        "SiteGuard — CCTV-1 TVT Dome",
+        "SiteGuard — CCTV-3 VHT Dome F977",
+    ]
+    for title in titles_to_delete:
         ids = delete_dashboards_by_title(token, title)
         for did in ids:
-            print(f"   DEL: {did}")
+            print(f"   DEL: {title} ({did})")
     print("   완료")
 
-    print("\n[4/5] 메인 그리드 대시보드 생성...")
+    print("\n[4/6] 메인 그리드 대시보드 생성...")
     _, grid_dashboard = build_grid_dashboard()
     r = requests.post(f"{TB_URL}/api/dashboard", headers=h(token), json=grid_dashboard)
     if r.status_code != 200:
@@ -336,7 +550,16 @@ def main():
     grid_db_id = r.json()["id"]["id"]
     print(f"   OK: {grid_db_id}")
 
-    print("\n[5/5] 기기별 대시보드 생성...")
+    print("\n[5/6] 카메라 목록 대시보드 생성...")
+    _, list_dashboard = build_camera_list_dashboard(CAMERAS)
+    r = requests.post(f"{TB_URL}/api/dashboard", headers=h(token), json=list_dashboard)
+    if r.status_code != 200:
+        print(f"   FAIL: {r.status_code} — {r.text[:300]}")
+    else:
+        list_db_id = r.json()["id"]["id"]
+        print(f"   OK: {list_db_id}")
+
+    print("\n[6/6] 개별 카메라 대시보드 생성 (5섹션)...")
     for cam in CAMERAS:
         dev_id = get_device_id(token, cam["name"])
         dev_dashboard = build_device_dashboard(cam)
@@ -349,19 +572,25 @@ def main():
         if dev_id:
             set_server_attributes(token, dev_id, {"device_dashboard_id": dev_db_id})
 
-    # ip-camera 프로파일에 그리드 대시보드 설정
+    # ip-camera 프로파일 기본 대시보드 → 그리드 대시보드
     profile_id = get_profile_id(token, "ip-camera")
     if profile_id:
         try:
-            update_profile_dashboard(token, profile_id, grid_db_id)
-            print(f"   OK: ip-camera 프로파일 기본 대시보드 설정")
+            r = requests.get(f"{TB_URL}/api/deviceProfile/{profile_id}", headers=h(token))
+            r.raise_for_status()
+            profile = r.json()
+            profile["defaultDashboardId"] = {"id": grid_db_id, "entityType": "DASHBOARD"}
+            r2 = requests.post(f"{TB_URL}/api/deviceProfile", headers=h(token), json=profile)
+            r2.raise_for_status()
+            print(f"   OK: ip-camera 프로파일 기본 대시보드 → 그리드")
         except Exception as e:
             print(f"   WARN: 프로파일 대시보드 설정 실패 — {e}")
 
-    print("\n" + "="*50)
+    print("\n" + "=" * 55)
     print("완료!")
-    print(f"  메인 대시보드:  http://46.62.155.122:8080/dashboard/{grid_db_id}")
-    print(f"  camera-grid.html: http://46.62.155.122:8080/camera-grid.html")
+    print(f"  현장 관제 그리드:  http://46.62.155.122:8080/dashboard/{grid_db_id}")
+    print(f"  카메라 목록:       http://46.62.155.122:8080/dashboard/{list_db_id}")
+    print(f"  camera-grid.html:  http://46.62.155.122/go2rtc/../camera-grid.html")
 
     return grid_db_id
 
