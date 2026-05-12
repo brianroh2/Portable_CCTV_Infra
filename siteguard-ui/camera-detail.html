@@ -516,8 +516,48 @@ async function doDelete() {
   }
 }
 
-function onvifRefresh() {
-  toast('ONVIF 갱신 요청 전송 (Phase D-2 — 에지 스크립트 연동 예정)');
+async function onvifRefresh() {
+  if (!deviceId) return;
+  const btn = document.querySelector('.btn-onvif');
+  if (btn) { btn.textContent = '⏳ 갱신 중...'; btn.disabled = true; }
+
+  try {
+    /* TB one-way RPC → 에지 ONVIF 핸들러가 수신 후 처리 */
+    await apiFetch(`/api/plugins/rpc/oneway/${deviceId}`, {
+      method: 'POST',
+      body: JSON.stringify({ method: 'getOnvifInfo', params: {}, timeout: 30000 })
+    });
+    toast('ONVIF 갱신 요청 전송 — 에지 응답 대기 중...');
+
+    /* 속성 갱신 폴링 (최대 60초, 2초 간격) */
+    const prevFw = attrs.firmware_version || '';
+    let updated = false;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const arr = await apiFetch(
+          `/api/plugins/telemetry/DEVICE/${deviceId}/values/attributes/SERVER_SCOPE`
+        );
+        const fresh = {};
+        arr.forEach(x => { fresh[x.key] = x.value; });
+        if (fresh.firmware_version && fresh.firmware_version !== prevFw) {
+          attrs.firmware_version = fresh.firmware_version;
+          attrs.firmware_date    = fresh.firmware_date || '';
+          renderSections();
+          toast(`✅ 펌웨어: ${attrs.firmware_version}`);
+          updated = true;
+          break;
+        }
+      } catch (_) {}
+    }
+    if (!updated) {
+      toast('⚠️ 에지 응답 없음 — edge_onvif_handler.py 실행 확인', true);
+    }
+  } catch (e) {
+    toast('RPC 오류: ' + e.message, true);
+  } finally {
+    if (btn) { btn.textContent = '🔄 ONVIF 갱신'; btn.disabled = false; }
+  }
 }
 
 // ── 초기 로드 ─────────────────────────────────────────────────────────────────
