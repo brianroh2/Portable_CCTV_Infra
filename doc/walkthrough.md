@@ -8,7 +8,7 @@
 
 ## 섹션 1 — 현재 인프라 현황 스냅샷
 
-> 마지막 업데이트: 2026-05-11 (에지·클라우드 이중 레이어 아키텍처 확정)
+> 마지막 업데이트: 2026-05-12 (TB 커스텀 관제 UI 완성 + Claude Code Hooks 구성)
 
 ### 1-1. 환경별 역할
 
@@ -73,6 +73,8 @@
 | **TB-2** | Frigate → Thingsboard MQTT 연동 | ✅ 완료 (2026-04-13) |
 | **Phase C** | go2rtc + LTE DDNS 카메라 스트리밍 | ✅ 완료 (2026-05-11) |
 | **Phase C 잔여** | TB 대시보드, 서브스트림, MSE 외부망 정상화 | ✅ 완료 (2026-05-11) |
+| **Phase C-UI** | TB 커스텀 관제 UI — 기기 탭 패널 교체 + camera-detail/list | ✅ 완료 (2026-05-12) |
+| **개발환경** | CLAUDE.md Behavioral Contract + Claude Code Hooks 자동화 | ✅ 완료 (2026-05-12) |
 
 **에지 레이어 (진행 예정):**
 
@@ -129,14 +131,16 @@
 | 화면 | URL |
 |------|-----|
 | TB 통합 관리 UI | http://46.62.155.122:8080 (tenant@thingsboard.org / tenant) |
-| 메인 관제 그리드 | http://46.62.155.122:8080/dashboard/bd0e61b0-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
-| CCTV-1 개별 | http://46.62.155.122:8080/dashboard/bd14a340-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
-| CCTV-3 개별 | http://46.62.155.122:8080/dashboard/bd1ce0a0-4d1e-11f1-bb6f-7d7ca6d1fbf3 |
+| **카메라 목록 관제** | http://46.62.155.122:8080/camera-list.html |
+| **CCTV-1 상세** | http://46.62.155.122:8080/camera-detail.html?id=b24c2930-4cea-11f1-acfb-7d7ca6d1fbf3 |
+| **CCTV-3 상세** | http://46.62.155.122:8080/camera-detail.html?id=b268b1e0-4cea-11f1-acfb-7d7ca6d1fbf3 |
+| TB 기기 목록 (사이드 패널) | http://46.62.155.122:8080/entities/devices (기기 클릭 → 커스텀 패널 자동 표시) |
+| 메인 관제 그리드 대시보드 | http://46.62.155.122:8080/dashboard/f1690ea0-4da6-11f1-b761-7d7ca6d1fbf3 |
 | go2rtc Web UI (직접) | http://46.62.155.122:1984 |
 | go2rtc (Nginx 경유) | http://46.62.155.122/go2rtc/ |
 
 > **영상 스트리밍 방식:** MSE (Nginx 포트 80 → go2rtc 1984 프록시)  
-> 영상 좌측 상단 "MSE" 레이블은 정상 — 현재 스트리밍 방식 표시
+> **TB 기기 탭 패널 교체:** Entities → Devices → 기기 클릭 시 Details/Attributes 탭 대신 camera-detail.html 자동 표시 (sg-inject.js)
 
 ### 1-8. 빠른 접속 명령어
 
@@ -162,6 +166,62 @@ ssh visionlinux "docker ps --format 'table {{.Names}}\t{{.Status}}'"
 ## 섹션 2 — 변경 이력 (Changelog)
 
 > 최신 항목이 위에 온다. 완료된 항목은 수정하지 않는다.
+
+---
+
+### [2026-05-12] Claude Code 개발환경 개선 — CLAUDE.md + Hooks
+
+**배경:** 반복 작업(패치→재시작→검증) 자동화 및 Claude 세션 간 일관된 행동 기준 확립.
+
+**완료 항목:**
+
+1. **CLAUDE.md → Agent Behavioral Contract 재편 (118줄)**
+   - WHY(철학) / WHAT(스택) / HOW(워크플로우) / Verification / Stop Conditions 5단 구조
+   - 낡는 상태 테이블 제거 → `doc/walkthrough.md` Progressive Disclosure로 위임
+   - Playwright 기반 자가 검증 명령 추가 (`탭 숨김: True | iframe: True` 기준)
+   - Stop Conditions 명문화: git push·파괴적 작업·에지/클라우드 혼용 시 중단
+
+2. **Claude Code Hooks 구성 (`.claude/`)**
+   - `PostToolUse/Bash`: `patch_siteguard_ui.py` 성공 감지 → `docker restart thingsboard` 자동 실행 → 120초 기동 대기 → `additionalContext`로 결과 피드백
+   - `PostToolUse/Edit|Write`: `siteguard-ui/` 파일 수정 시 패치 스크립트 실행 안내
+   - `settings.local.json`(세션별 권한)은 `.gitignore`로 로컬 전용 유지
+
+**효과:** 3단계 수동 작업(패치→재시작→헬스체크) → 패치 1단계로 단축
+
+---
+
+### [2026-05-12] TB 커스텀 관제 UI 완성 — Phase C-UI
+
+**배경:** TB Entities → Devices → 기기 클릭 시 나타나는 기본 탭(Details, Attributes, Latest telemetry 등)을 숨기고, `camera-detail.html`로 교체.
+
+**완료 항목:**
+
+1. **sg-inject.js 완전 재작성 (Playwright DOM 분석 기반)**
+   - 문제: `tb-device-tabs`가 엔티티 목록 사이드 패널에서 DOM에 없음 (URL 변경 없이 `mat-drawer` 방식)
+   - Playwright 헤드리스로 실제 DOM 구조 확인 → `mat-tab-group` 타깃으로 변경
+   - 기기 탭 즉시 숨김(`display:none!important`) → `div.mat-content`에 iframe 삽입
+   - 기기명은 `span.tb-details-title-text`에서 추출
+
+2. **JWT 토큰 키 수정 (3개 파일)**
+   - TB 4.2.1.1 실측: `jwt_token` (Playwright로 localStorage 직접 확인)
+   - `camera-detail.html`, `camera-list.html`, `sg-inject.js` 모두 `jwt_token` 우선으로 통일
+
+3. **기기명 → UUID API 수정**
+   - 기존: `/api/tenant/device?deviceName=` → TB 4.x에서 400 오류
+   - 변경: `/api/tenant/devices?pageSize=20&page=0&textSearch={name}` + 정확한 이름 매칭
+
+4. **시스템 정보 섹션 — 펌웨어 TBD 처리**
+   - 외부 DDNS(0004312.m2mnet.kr:80) ONVIF 접근 불가 확인 (웹UI 리다이렉트만 응답)
+   - 미수집 항목 `"ONVIF 갱신 필요"` → `"TBD"` 로 변경
+   - `🔄 ONVIF 갱신` 버튼: TB RPC `getOnvifInfo` 전송 → 30초 폴링
+   - 에지 핸들러: `thingsboard/scripts/edge_onvif_handler.py` 신규 작성 (에지 PC 실행용)
+
+**검증 결과 (Playwright):**
+```
+tabGroup style: display: none !important  ✅
+iframe src: /camera-detail.html?id={uuid} ✅
+iframe 내용: cctv-1 기기 상세 정상 표시   ✅
+```
 
 ---
 
