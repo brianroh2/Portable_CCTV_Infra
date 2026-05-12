@@ -299,8 +299,8 @@ function sec1() {
 function sec2() {
   const fv = val('firmware_version', '');
   const fd = val('firmware_date', '');
-  const fvDisp = fv || '<span class="muted">— ONVIF 갱신 필요</span>';
-  const fdDisp = fd || '<span class="muted">— ONVIF 갱신 필요</span>';
+  const fvDisp = fv || '<span class="muted">TBD</span>';
+  const fdDisp = fd || '<span class="muted">TBD</span>';
   return `<div class="section">
     <div class="sec-head"><span class="sec-head-text">② 시스템 정보</span></div>
     <div class="attr-table">
@@ -522,17 +522,16 @@ async function onvifRefresh() {
   if (btn) { btn.textContent = '⏳ 갱신 중...'; btn.disabled = true; }
 
   try {
-    /* TB one-way RPC → 에지 ONVIF 핸들러가 수신 후 처리 */
+    /* TB one-way RPC → 에지 PC의 edge_onvif_handler.py --daemon 이 수신 */
     await apiFetch(`/api/plugins/rpc/oneway/${deviceId}`, {
       method: 'POST',
       body: JSON.stringify({ method: 'getOnvifInfo', params: {}, timeout: 30000 })
     });
-    toast('ONVIF 갱신 요청 전송 — 에지 응답 대기 중...');
+    toast('요청 전송 — 에지 응답 대기 중 (최대 30초)...');
 
-    /* 속성 갱신 폴링 (최대 60초, 2초 간격) */
+    /* 속성 갱신 폴링 (최대 30초, 2초 간격) */
     const prevFw = attrs.firmware_version || '';
-    let updated = false;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 2000));
       try {
         const arr = await apiFetch(
@@ -545,14 +544,11 @@ async function onvifRefresh() {
           attrs.firmware_date    = fresh.firmware_date || '';
           renderSections();
           toast(`✅ 펌웨어: ${attrs.firmware_version}`);
-          updated = true;
-          break;
+          return;
         }
       } catch (_) {}
     }
-    if (!updated) {
-      toast('⚠️ 에지 응답 없음 — edge_onvif_handler.py 실행 확인', true);
-    }
+    toast('에지 미응답 — 에지 PC에서 edge_onvif_handler.py --daemon 실행 필요', true);
   } catch (e) {
     toast('RPC 오류: ' + e.message, true);
   } finally {
