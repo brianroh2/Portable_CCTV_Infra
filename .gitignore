@@ -22,8 +22,14 @@ thingsboard/data/
 # ── 로그 파일 ──────────────────────────────────
 **/*.log
 
-# ── Claude 설정 (로컬 전용) ────────────────────
+# ── Claude 설정 ────────────────────────────────
 **/.claude/
+# 프로젝트 공유 대상: hooks + 프로젝트 settings
+!.claude/
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/*.py
+.claude/settings.local.json
 # ── 가상환경 ───────────────────────────────────
 thingsboard/.venv/
 # ── 임시 작업 폴더 ─────────────────────────────
