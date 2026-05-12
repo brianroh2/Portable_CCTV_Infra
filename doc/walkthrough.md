@@ -87,6 +87,19 @@
 | **Phase E** | cctv-2 추가 (TVT Bullet, 주택 공유기 DDNS) | 🔲 |
 | **Phase F** | 에지 PC → 현장 전용 소형 PC 이전 | 🔲 예정 |
 
+**개발 환경 고도화 (Phase 독립):**
+
+| 항목 | 내용 | 조건 |
+|------|------|------|
+| Elicitation | 카메라 신규 등록 시 Claude가 필요 정보 먼저 질문 → 자동 속성 세팅 | 지금 가능 |
+| Multi-agent 핸드오프 | Hetzner 에이전트 코드 작성·push → 에지 에이전트 자동 pull·재시작 | Phase D 완료 후 |
+| /loop 모니터링 | TB·go2rtc 헬스체크 주기 감시, 이상 시 알림 | Phase D 완료 후 |
+| Open-Closed 파이프라인 | 신규 카메라·서비스 추가 시 patch 스크립트 무수정 확장 | Phase E 준비 시 |
+| Harness Engineering | Hetzner/에지 에이전트 오케스트레이션 전체 자동화 | Phase F 이후 |
+| /goal 배포 자동화 | 코드 변경 → 검증 → 배포 전 사이클 자율 실행 | Harness 완성 후 |
+
+> **판단 기준:** 에지 레이어 미완성 상태에서 하네스 구축 시 복잡성만 증가. Phase D(에지 안정화) 완료를 전제로 순차 적용.
+
 ### 1-6. 아키텍처 설계 원칙
 
 ```
