@@ -196,9 +196,9 @@ input.edit-field:focus, select.edit-field:focus { outline: none; border-color: #
 </div>
 
 <script>
-// TB 4.x localStorage 키: 'TB-' 접두어 사용
-const token    = localStorage.getItem('TB-jwt_token') ||
-                 localStorage.getItem('jwt_token') ||
+// TB 4.x localStorage 키
+const token    = localStorage.getItem('jwt_token') ||
+                 localStorage.getItem('TB-jwt_token') ||
                  localStorage.getItem('tb_ui_token');
 const _params   = new URLSearchParams(location.search);
 let   deviceId  = _params.get('id');   // id= 우선, 없으면 name=으로 조회
@@ -528,11 +528,15 @@ async function loadDevice() {
       '<p style="color:#f44;padding:20px;text-align:center">⚠️ TB 로그인 후 이용하세요</p>';
     return;
   }
-  // id= 없으면 name= 으로 기기 조회
+  // id= 없으면 name= 으로 기기 조회 (textSearch 후 정확한 이름 매칭)
   if (!deviceId && deviceName_param) {
     try {
-      const dev0 = await apiFetch(`/api/tenant/device?deviceName=${encodeURIComponent(deviceName_param)}`);
-      deviceId = dev0.id.id;
+      const list = await apiFetch(
+        `/api/tenant/devices?pageSize=20&page=0&textSearch=${encodeURIComponent(deviceName_param)}`
+      );
+      const exact = (list.data || []).find(d => d.name === deviceName_param);
+      if (!exact) throw new Error('not found');
+      deviceId = exact.id.id;
     } catch (e) {
       document.getElementById('sections').innerHTML =
         `<p style="color:#f44;padding:20px;text-align:center">⚠️ 기기를 찾을 수 없습니다: ${deviceName_param}</p>`;
