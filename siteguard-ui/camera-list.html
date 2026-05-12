@@ -115,9 +115,10 @@ tr:hover td { background: #141422; }
 </div>
 
 <script>
-const token = localStorage.getItem('jwt_token') ||
-              localStorage.getItem('tb_ui_token') ||
-              sessionStorage.getItem('jwt_token');
+// TB 4.x localStorage 키: 'TB-' 접두어 사용
+const token = localStorage.getItem('TB-jwt_token') ||
+              localStorage.getItem('jwt_token') ||
+              localStorage.getItem('tb_ui_token');
 
 async function api(path) {
   if (!token) throw new Error('로그인 필요');

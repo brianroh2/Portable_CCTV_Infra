@@ -188,9 +188,10 @@ input.edit-field:focus, select.edit-field:focus { outline: none; border-color: #
 </div>
 
 <script>
-const token    = localStorage.getItem('jwt_token') ||
-                 localStorage.getItem('tb_ui_token') ||
-                 sessionStorage.getItem('jwt_token');
+// TB 4.x localStorage 키: 'TB-' 접두어 사용
+const token    = localStorage.getItem('TB-jwt_token') ||
+                 localStorage.getItem('jwt_token') ||
+                 localStorage.getItem('tb_ui_token');
 const deviceId = new URLSearchParams(location.search).get('id');
 
 let devName = '';
