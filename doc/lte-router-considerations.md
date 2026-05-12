@@ -1,6 +1,6 @@
 # LTE 라우터 사용 고려사항
 
-> 작성일: 2026-04-23
+> 작성일: 2026-04-23 / 최종수정: 2026-05-11
 > 적용 모델: M2MNet LT7 (산업용 LTE 라우터)
 > 프로젝트: SiteGuard 이동형 CCTV 관제 시스템
 
@@ -74,23 +74,24 @@ LTE 공인IP라도 **동적 할당**이 기본이다.
 ### 2-2. 포트포워딩
 
 - LT7 자체 기능: 지원 ✅
-- **실제 동작 여부: 통신사 정책에 따라 결정됨 — 섹션 2-6 참조**
+- **실제 동작 여부: NAT Free 설정 후 정상 동작 확인 — 섹션 2-6 참조**
 - 프로토콜: TCP만 설정 (exec:ffmpeg -rtsp_transport tcp 사용으로 UDP 불필요)
 
+**현재 현장 적용 규칙 (2026-05-11 확인):**
 ```
 설정 위치: http://192.168.1.1 → Port Forwarding 메뉴
 
-예시 (카메라 3대):
-  외부포트 554 → 내부IP 192.168.1.101 : 554  (카메라 1)
-  외부포트 555 → 내부IP 192.168.1.102 : 554  (카메라 2)
-  외부포트 556 → 내부IP 192.168.1.103 : 554  (카메라 3)
-  프로토콜: TCP
+Name       WAN Port  LAN IP          LAN Port  Protocol  용도
+RTSP_TCP1  554       192.168.1.51    554       TCP       CCTV-1 (TVT Dome) 외부접근
+RTSP_TCP3  555       192.168.1.53    554       TCP       CCTV-3 (VHT Dome F977) 외부접근
+
+향후 추가 규칙:
+  RTSP_TCP4: WAN:556 → 192.168.1.54:554
+  RTSP_TCP5: WAN:557 → 192.168.1.55:554
 ```
 
 > **TCP 강제 이유:** go2rtc 기본 rtsp:// 방식은 UDP RTP를 사용하나 LTE NAT 환경에서 UDP 역방향 패킷이 차단됨.
-> `exec:ffmpeg -rtsp_transport tcp` 패턴으로 통일하면 TCP만으로 동작 → LTE/Tailscale 모두 통과 보장.
-
-> ⚠️ **SKT 일반 LTE 회선에서는 포트포워딩 설정과 무관하게 인바운드가 차단됨 — 섹션 2-6 참조**
+> `exec:ffmpeg -rtsp_transport tcp` 패턴으로 통일하면 TCP만으로 동작 → LTE 모두 통과 보장.
 
 ---
 
@@ -107,74 +108,49 @@ LTE 공인IP라도 **동적 할당**이 기본이다.
 
 - 지원 확인 ✅
 - IP 변동 시 도메인 주소 자동 업데이트
-- **M2MNet LT7 지원 DDNS: No-IP, DynDNS 두 가지만 지원** (DuckDNS 등 직접 지정 불가)
+
+**M2MNet LT7 DDNS 옵션:**
+
+| 방식 | 서비스 | 도메인 | 제한 | 비고 |
+|------|--------|--------|------|------|
+| **자체 DDNS (권장)** | M2MNet ddns.m2mnet.kr | 0004312.m2mnet.kr | 없음 | LT7 라우터 자체 갱신, 별도 가입 불필요 |
+| 외부 DDNS | No-IP | mysite.ddns.net | 30일 이메일 Confirm | 무료 3개 호스트 |
+| 외부 DDNS | DynDNS | - | 유료만 | $55/년~ |
+
+> **현재 현장 적용: M2MNet 자체 DDNS 사용**
+> - 도메인: `0004312.m2mnet.kr`
+> - 라우터에서 자동 갱신 — 외부 서비스 가입·30일 확인 불필요
+> - 설정 위치: http://192.168.1.1 → DDNS → ddns.m2mnet.kr 선택
 
 **DDNS 동작 원리 — 등록되는 IP가 무엇인가:**
 
 ```
-[IP 카메라] 192.168.1.x  ← 사설IP, 외부 비노출
+[IP 카메라] 192.168.1.51  ← 사설IP, 외부 비노출
     ↓ 유선
-[LTE 라우터] WAN IP: 42.22.14.80  ← 이 주소가 No-IP에 등록됨
-    DDNS: mysite.ddns.net = 42.22.14.80 (자동 갱신)
-    포트포워딩: 외부:554 → 카메라:554
+[LTE 라우터] WAN IP: xx.xx.xx.xx  ← 이 주소가 DDNS에 등록됨
+    DDNS: 0004312.m2mnet.kr = xx.xx.xx.xx (자동 갱신)
+    포트포워딩: 외부:554 → 192.168.1.51:554
     ↓
 인터넷
     ↓
 [Hetzner go2rtc]
-  rtsp://admin:pw@mysite.ddns.net:554/...
-                   ↑
-    도메인 → No-IP DNS → WAN IP 해석 → 라우터 → 카메라
+  rtsp://admin:pw@0004312.m2mnet.kr:554/profile1
 ```
-
-- No-IP에 등록되는 주소 = **LTE 라우터의 WAN(공인) IP** (카메라 사설IP 아님)
-- 카메라의 사설 IP(192.168.1.x)는 외부에 노출되지 않음
-- 포트포워딩이 라우터에서 카메라로 패킷 전달
 
 **IP 변동 시 자동 처리 흐름:**
 ```
-LTE IP 변경 (예: 42.22.14.80 → 58.xx.xx.xx)
+LTE IP 변경
     ↓
-라우터가 No-IP 서버에 새 IP 자동 통보
+라우터가 M2MNet DDNS 서버에 새 IP 자동 통보
     ↓
-mysite.ddns.net = 58.xx.xx.xx 로 업데이트 (수십 초 내)
+0004312.m2mnet.kr 업데이트 (수십 초 내)
     ↓
 go2rtc는 도메인 그대로 사용 → 자동 재연결
     (IP 변동 후 최대 1~2분 영상 끊김 후 복구)
 ```
 
-**서비스별 무료 한도:**
-
-| 서비스 | 무료 여부 | 호스트 수 | 제한 사항 | 유료 플랜 |
-|--------|----------|----------|---------|---------|
-| **No-IP** | ✅ 무료 | 3개 | 30일마다 이메일 Confirm 필수 (미확인 시 비활성화) | $24.95/년 (자동갱신, 무제한) |
-| **DynDNS** | ❌ 없음 | - | 2014년 무료 폐지 | $55/년~ |
-
-> **결론: No-IP 무료 플랜 사용 권장**
-> - **주의:** 매월 No-IP 갱신 이메일 Confirm 클릭 필수 → 미확인 시 카메라 영상 끊김
-> - RPi 추가 후에는 `noip2` 데몬으로 자동 갱신 가능 (이메일 확인 불필요)
-> - 장기 상용화 시 Cloudflare + 자체 도메인으로 전환 (RPi 필요, 섹션 6 참조)
-
-**No-IP 설정 순서:**
-```
-1. https://www.noip.com 계정 생성 (무료)
-2. Dynamic DNS → Create Hostname
-   - Hostname: mysite  (예: mysite.ddns.net)
-   - Record Type: DNS Host (A)
-3. 라우터 관리페이지 → DDNS 메뉴
-   - 서비스 선택: No-IP
-   - 호스트명: mysite.ddns.net
-   - 계정: No-IP 이메일 / 비밀번호
-4. 저장 후 현재 IP 반영 확인
-5. 매월 No-IP 갱신 이메일 Confirm (무료 플랜)
-```
-
-**RPi 추가 후 30일 갱신 자동화:**
-```bash
-sudo apt install noip2
-sudo noip2 -C          # 계정 설정
-sudo systemctl enable --now noip2
-# → 이메일 확인 없이 자동 갱신
-```
+**장기 상용화 시 전환 옵션:**
+- Cloudflare + 자체 도메인: RPi에서 Cloudflare API로 갱신 (30일 제약 없음, Phase 3)
 
 ---
 
@@ -209,13 +185,27 @@ sudo systemctl enable --now noip2
 - 포트포워딩(내부 장비로 전달)은 SKT 망 정책에 의해 전부 차단됨
 - 포트 번호 변경(554→8554 등)으로 우회 불가 — 정책적 차단
 
-#### 결론
+#### 결론 (초기 확인 시점)
 
 | 항목 | 판단 |
 |------|------|
 | **LTE 라우터(LT7) 자체** | 문제 없음 — 포트포워딩 기능 정상 |
 | **SKT 일반 LTE + DDNS + 포트포워딩** | ❌ **불가** — 통신사 인바운드 차단 |
-| **해결 방법** | Tailscale (아웃바운드 터널) — 섹션 4 참조 |
+| **해결 방법** | NAT Free 설정 (아래 참조) 또는 Tailscale (섹션 4 참조) |
+
+#### ✅ 해결 (2026-05-11) — NAT Free 설정 적용
+
+통신사(SKT)에서 NAT Free를 설정하여 LTE 회선에서 인바운드 포트포워딩이 가능해졌다.
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| NAT Free 설정 | ✅ 적용됨 | SKT 통신사 요청으로 설정 |
+| DDNS + 포트포워딩 | ✅ 정상 동작 | 0004312.m2mnet.kr 사용 |
+| CCTV-1 외부 접근 (WAN:554) | ✅ 확인 | VLC 재생 성공 |
+| CCTV-3 외부 접근 (WAN:555) | ✅ 확인 | VLC 재생 성공 |
+
+> **NAT Free란:** 통신사 회선 레벨에서 인바운드 포트를 허용하는 설정. SKT에 별도 요청으로 적용 가능.
+> 기업용 고정IP SIM과 유사한 효과이나, 동적 IP 유지 (DDNS 필요).
 
 #### 통신사별 인바운드 허용 현황 (참고)
 
@@ -241,6 +231,31 @@ RTSP 영상 끊김, 패킷 손실 발생 시: 1400으로 낮춰서 테스트
 ---
 
 ## 3. 카메라 연결 구성
+
+### 3-0. 현재 현장 실제 구성 (2026-05-11 확정)
+
+```
+LTE 라우터 (192.168.1.1) — DHCP: 100~200, LAN 포트 2개
+├── [포트1] CCTV-1 (TVT Dome,      192.168.1.51 고정IP)  WAN:554
+└── [포트2] 공유기A (ipTIME A2004MU, AP모드, 192.168.1.2)
+              ├── 개발PC-1 (Windows/SKT,   192.168.1.179 유동)
+              ├── 개발PC-2 (Linux,         192.168.1.111 유동)
+              └── POE 스위치허브
+                    └── CCTV-3 (VHT Dome F977, 192.168.1.53 고정IP)  WAN:555
+```
+
+**핵심 특이사항:**
+- LT7 LAN 포트 2개 제약 → AP 모드 공유기 + POE 스위치로 확장
+- 공유기A는 AP 모드 (NAT 없음, 스위치 역할만) → 모든 기기 192.168.1.x 단일 대역
+- 포트포워딩: LT7 한 곳에만 설정 (이중 NAT 없음)
+
+**실제 적용 go2rtc.yaml:**
+```yaml
+cctv_1: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:pw@0004312.m2mnet.kr:554/profile1 -c:v copy -f mpegts -
+cctv_3: exec:ffmpeg -hide_banner -rtsp_transport tcp -i rtsp://admin:pw@0004312.m2mnet.kr:555/Ch1 -c:v copy -f mpegts -
+```
+
+---
 
 ### 3-1. 단일 카메라
 
@@ -698,29 +713,26 @@ streams:
 
 ### Phase 1 즉시 적용 (카메라만)
 
-> ⚠️ **SKT 일반 LTE 사용 시:** DDNS+포트포워딩 방식 불가 → Tailscale 방식으로 대체
+**DDNS+포트포워딩 방식 (NAT Free 적용 — 현재 현장 환경):**
+- [x] WAN IP = whatismyip 동일 확인 (공인IP 검증)
+- [x] 통신사 NAT Free 설정 적용 (SKT 요청으로 처리)
+- [x] LTE 라우터 DDNS: M2MNet 자체 DDNS 설정 (0004312.m2mnet.kr)
+- [x] 카메라 고정 IP 설정 (CCTV-1: 192.168.1.51, CCTV-3: 192.168.1.53)
+- [x] 라우터 포트포워딩: TCP 554→.51, TCP 555→.53
+- [x] go2rtc.yaml에 exec:ffmpeg + DDNS 패턴으로 스트림 추가
+- [x] go2rtc 재시작 및 영상 확인 (VLC 내부/외부 모두 ✅)
+- [ ] CCTV-1 비밀번호 변경 (보안 ⚠️)
 
-**Tailscale 방식 (SKT LTE 환경 — 에지장비 필요):**
+**NAT Free 미적용 환경 대안 (SKT 일반 LTE 환경):**
 - [ ] 에지장비(RPi 또는 임시 Windows PC)를 LTE 라우터에 유선 연결
 - [ ] 에지장비에 Tailscale 설치 및 Hetzner 동일 계정 로그인
 - [ ] 서브넷 라우터 활성화: `tailscale up --advertise-routes=192.168.1.0/24`
 - [ ] Tailscale 관리 콘솔에서 서브넷 라우트 승인
-- [ ] 카메라 고정 IP 설정 (192.168.1.x)
 - [ ] go2rtc.yaml에 카메라 로컬 IP 직접 사용 (DDNS 불필요):
   ```yaml
-  cctv_lte1: exec:ffmpeg -hide_banner -rtsp_transport tcp \
-    -i rtsp://admin:pw@192.168.1.153:554/profile1 -c:v copy -f mpegts -
+  cctv_1: exec:ffmpeg -hide_banner -rtsp_transport tcp \
+    -i rtsp://admin:pw@192.168.1.51:554/profile1 -c:v copy -f mpegts -
   ```
-
-**DDNS+포트포워딩 방식 (유선 인터넷 또는 기업용 고정IP SIM 환경):**
-- [ ] WAN IP = whatismyip 동일 확인 (공인IP 검증)
-- [ ] No-IP 계정 생성 및 호스트네임 등록
-- [ ] 라우터 DDNS: No-IP 설정 완료
-- [ ] 카메라 로컬 IP DHCP 고정 예약
-- [ ] 라우터 포트포워딩: TCP 554~ → 카메라 IP
-- [ ] go2rtc.yaml에 exec:ffmpeg + DDNS 패턴으로 스트림 추가
-- [ ] go2rtc 재시작 및 영상 확인
-- [ ] 매월 No-IP 갱신 이메일 캘린더 등록
 
 ### Phase 2 (RPi + 음성 추가)
 - [ ] RPi OS 설치 및 LTE 라우터 유선 연결
